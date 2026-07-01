@@ -37,16 +37,21 @@ Excluded: video tracking, camera streaming, vehicle recognition, microservices, 
 ## Dataset workflow
 
 ```powershell
-python scripts/download_data.py --config configs/dataset.yaml
+python scripts/download_data.py --config configs/dataset.yaml --dataset detection
+python scripts/download_data.py --config configs/dataset.yaml --dataset ocr
 python scripts/prepare_data.py --config configs/dataset.yaml
 python scripts/validate_data.py --config configs/dataset.yaml
 python scripts/split_data.py --config configs/dataset.yaml
 ```
 
-The initial Kaggle candidate is
-[`miahuynh04/vietnamese-license-plate-detection`](https://www.kaggle.com/datasets/miahuynh04/vietnamese-license-plate-detection).
-It is not considered approved until the downloaded files, annotations, provenance, and license
-have been audited.
+The baseline data strategy uses two Kaggle datasets:
+
+- detection: [`miahuynh04/vietnamese-license-plate-detection`](https://www.kaggle.com/datasets/miahuynh04/vietnamese-license-plate-detection)
+- OCR: [`wirqhuy/vietnamese-license-plate-ocr`](https://www.kaggle.com/datasets/wirqhuy/vietnamese-license-plate-ocr)
+
+This is deliberate. The detection source provides full-scene vehicle images with plate bounding
+boxes, while the OCR source provides cropped plate images with text labels. We will evaluate them
+independently before measuring the combined pipeline.
 
 ## Quality commands
 

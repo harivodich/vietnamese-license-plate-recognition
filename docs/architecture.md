@@ -3,8 +3,9 @@
 ## Training path
 
 ```text
-Kaggle source
-  -> immutable raw data
+Kaggle sources
+  -> immutable raw data for detection
+  -> immutable raw data for OCR
   -> normalized JSONL manifest
   -> integrity/label/duplicate audit
   -> group-aware frozen splits

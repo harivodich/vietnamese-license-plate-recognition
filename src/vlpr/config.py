@@ -15,6 +15,7 @@ class DatasetSettings(BaseModel):
     handle: str = Field(pattern=r"^[^/\s]+/[^/\s]+$")
     version: int = Field(ge=1)
     country: str = Field(min_length=2, max_length=2)
+    task: str = Field(pattern=r"^(detection|ocr)$")
     expected_license: str = Field(min_length=1)
     raw_dir: Path
     manifest_path: Path
@@ -59,9 +60,27 @@ class ProjectConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    dataset: DatasetSettings
+    datasets: dict[str, DatasetSettings]
     validation: ValidationSettings
     split: SplitSettings
+
+    @model_validator(mode="after")
+    def validate_dataset_registry(self) -> "ProjectConfig":
+        """Require the baseline dataset roles used by the project."""
+        required = {"detection", "ocr"}
+        missing = required.difference(self.datasets)
+        if missing:
+            names = ", ".join(sorted(missing))
+            raise ValueError(f"missing required dataset entries: {names}")
+        return self
+
+    def dataset(self, name: str) -> DatasetSettings:
+        """Return one registered dataset by logical role."""
+        try:
+            return self.datasets[name]
+        except KeyError as exc:
+            known = ", ".join(sorted(self.datasets))
+            raise KeyError(f"unknown dataset '{name}', expected one of: {known}") from exc
 
 
 def load_config(path: Path) -> ProjectConfig:

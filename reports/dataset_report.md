@@ -2,10 +2,16 @@
 
 ## Status
 
-Downloaded and structurally inventoried. Image integrity, visual label quality, duplicate leakage,
-source grouping, and license evidence still require validation.
+Detection and OCR are now treated as separate source datasets. The detection source has been
+downloaded and structurally inventoried. The OCR candidates have been inspected enough to choose a
+baseline OCR source, but they have not yet been fully audited for duplicates, image integrity, or
+label quality.
 
-## Source
+This split is intentional. For this project, "end-to-end" refers to the pipeline output, not to a
+requirement that one public dataset must contain every annotation type. Separate component datasets
+are acceptable as long as the final benchmark set is frozen and human-verified.
+
+## Detection source
 
 - Kaggle handle: `miahuynh04/vietnamese-license-plate-detection`
 - Dataset version: `1`
@@ -16,7 +22,7 @@ source grouping, and license evidence still require validation.
 The license value above is not yet treated as verified provenance. A copy of the license or other
 primary evidence distributed with the dataset has not been found in the downloaded files.
 
-## Structural inventory
+## Detection structural inventory
 
 | Split | Images | Label files | Bounding boxes | Multi-plate images |
 |---|---:|---:|---:|---:|
@@ -40,12 +46,52 @@ The initial structural scan found:
 - no normalized coordinate values outside `[0, 1]`;
 - no OCR text labels.
 
+## OCR source decision
+
+Selected OCR baseline source:
+
+- Kaggle handle: `wirqhuy/vietnamese-license-plate-ocr`
+- Dataset version: `1`
+- Data-card license claim: MIT
+- Structure observed during inspection:
+  - `imgs/train`: 5,314 images
+  - `imgs/val`: 1,329 images
+  - `labels/train.txt` and `labels/val.txt` with `image_path<TAB>plate_text`
+
+Sample labels observed:
+
+```text
+imgs/train/type5_258.jpg    BT 5581
+imgs/train/type7_527.jpg    51G 46455
+imgs/val/type4_628.jpg      73B 0040
+```
+
+Secondary OCR source kept for possible augmentation only:
+
+- Kaggle handle: `topkek69/vietnamese-license-plate-ocr`
+- Structure observed during inspection:
+  - `cropped`: 6,643 images
+  - `generated`: 5,547 images
+  - `labels/crop_labels.csv`
+  - `labels/gen_labels.csv`
+
+This source mixes real cropped plates with generated images. It may help OCR robustness later, but
+it should not be treated as the primary benchmark dataset until we quantify the effect of synthetic
+data.
+
+Rejected as OCR source:
+
+- `johnkhanhnguyen/vietnamese-license-plate`
+
+This dataset contains YOLO detection labels only and does not provide OCR strings.
+
 ## Current limitations
 
 - The source-provided split has not been accepted as the project split.
 - No video, vehicle, capture-session, or duplicate group identifiers are present.
-- The absence of OCR text labels means this dataset supports detection only.
+- The selected OCR dataset has text labels, but it is not paired with full-scene plate bounding
+  boxes from the detection dataset.
 - Images have not yet been decoded to detect corruption or measure resolution.
 - Bounding boxes have not yet been checked visually.
 - Exact and near-duplicate leakage has not yet been measured.
-- An external test set has not been selected.
+- A final end-to-end test set with human-verified plate text still needs to be built.

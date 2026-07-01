@@ -1,10 +1,21 @@
-dataset:
-  handle: miahuynh04/vietnamese-license-plate-detection
-  version: 1
-  country: VN
-  expected_license: MIT
-  raw_dir: data/raw/kaggle
-  manifest_path: data/interim/manifest.jsonl
+datasets:
+  detection:
+    handle: miahuynh04/vietnamese-license-plate-detection
+    version: 1
+    country: VN
+    task: detection
+    expected_license: MIT
+    raw_dir: data/raw/kaggle/detection
+    manifest_path: data/interim/detection_manifest.jsonl
+
+  ocr:
+    handle: wirqhuy/vietnamese-license-plate-ocr
+    version: 1
+    country: VN
+    task: ocr
+    expected_license: MIT
+    raw_dir: data/raw/kaggle/ocr
+    manifest_path: data/interim/ocr_manifest.jsonl
 
 validation:
   image_extensions: [".jpg", ".jpeg", ".png", ".bmp", ".webp"]
