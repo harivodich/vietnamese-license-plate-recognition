@@ -11,16 +11,39 @@ requires-python = ">=3.10"
 license = { file = "LICENSE" }
 authors = [{ name = "VLPR contributors" }]
 dependencies = [
-    "kagglehub>=0.3.13,<1",
-    "kagglesdk>=0.1.14,<0.1.24",
     "numpy>=1.26,<3",
-    "pillow>=10.4,<13",
     "pip-system-certs>=5.3,<6; sys_platform == 'win32'",
     "pydantic>=2.8,<3",
     "pyyaml>=6.0.2,<7",
 ]
 
 [project.optional-dependencies]
+data = [
+    "kagglehub>=0.3.13,<1",
+    "kagglesdk>=0.1.14,<0.1.24",
+    "pillow>=10.4,<13",
+]
+detection = [
+    "torch>=2.6,<3",
+    "ultralytics>=8.3,<9",
+]
+ocr = [
+    "paddleocr>=3.7,<4",
+    "paddlepaddle>=3.3,<4",
+]
+tracking = [
+    "wandb>=0.28,<1",
+]
+api = [
+    "fastapi>=0.115,<1",
+    "jinja2>=3.1,<4",
+    "python-multipart>=0.0.20,<1",
+    "uvicorn[standard]>=0.34,<1",
+]
+export = [
+    "onnx>=1.17,<2",
+    "onnxruntime>=1.20,<2",
+]
 dev = [
     "mypy>=1.11,<2",
     "pre-commit>=3.8,<5",
@@ -51,7 +74,7 @@ files = ["app", "scripts", "src", "tests"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["kagglehub"]
+module = ["kagglehub", "wandb"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

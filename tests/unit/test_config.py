@@ -12,7 +12,8 @@ def test_split_ratios_accept_complete_partition() -> None:
 
 
 def test_config_exposes_detection_and_ocr_datasets() -> None:
-    config = load_config(Path(r"E:\PRJ\vietnamese-license-plate-recognition\configs\dataset.yaml"))
+    config_path = Path(__file__).parents[2] / "configs" / "dataset.yaml"
+    config = load_config(config_path)
 
     assert config.dataset("detection").task == "detection"
     assert config.dataset("ocr").task == "ocr"

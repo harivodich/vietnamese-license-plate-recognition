@@ -18,14 +18,35 @@ This repository uses the existing Conda environment `HariAI`:
 ```powershell
 conda activate HariAI
 python --version
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[data,tracking,dev]"
 pre-commit install
 ```
 
 `pip install -e` performs an editable install: imports resolve to the source files in this
-repository, so code changes take effect without reinstalling the package. The `[dev]` extra adds
-quality tools such as Ruff, mypy, pytest, and pre-commit; it does not add training frameworks yet.
-Model dependencies will be selected when the detection baseline is designed.
+repository, so code changes take effect without reinstalling the package. Extras add only the
+dependencies needed by the current project gate.
+
+Dependency groups are intentionally separated:
+
+- `data`: Kaggle download and image loading;
+- `detection`: PyTorch and Ultralytics;
+- `ocr`: PaddlePaddle and PaddleOCR;
+- `tracking`: Weights & Biases;
+- `api`: FastAPI and the localhost web UI;
+- `export`: ONNX export and inference;
+- `dev`: lint, type checking, tests, and pre-commit.
+
+Install only the groups needed for the current gate. This avoids installing both ML frameworks
+before they are needed.
+
+## Environment check
+
+```powershell
+python scripts/check_environment.py --output reports/environment_report.md
+```
+
+This command distinguishes a physical NVIDIA GPU from a CUDA-enabled PyTorch runtime. A machine
+can have an NVIDIA GPU while the installed PyTorch build still runs on CPU.
 
 ## Scope v1
 

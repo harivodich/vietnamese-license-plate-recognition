@@ -14,3 +14,4 @@ data/processed/*
 !data/interim/.gitkeep
 !data/processed/.gitkeep
 mlruns/
+wandb/

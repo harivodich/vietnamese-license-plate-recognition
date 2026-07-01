@@ -1,0 +1,8 @@
+project:
+  name: vietnamese-license-plate-recognition
+  seed: 20260701
+
+tracking:
+  provider: wandb
+  project: vietnamese-license-plate-recognition
+  mode: auto
