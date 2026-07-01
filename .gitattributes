@@ -1,0 +1,9 @@
+* text=auto eol=lf
+
+*.bmp binary
+*.jpeg binary
+*.jpg binary
+*.onnx binary
+*.png binary
+*.pt binary
+*.webp binary

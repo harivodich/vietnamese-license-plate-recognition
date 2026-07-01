@@ -3,9 +3,9 @@
 import argparse
 import json
 import logging
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Sequence
 
 import kagglehub
 
