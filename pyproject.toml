@@ -1,0 +1,56 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vietnamese-license-plate-recognition"
+version = "0.1.0"
+description = "End-to-end Vietnamese license plate detection and recognition"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "VLPR contributors" }]
+dependencies = [
+    "kagglehub>=0.3.13,<1",
+    "numpy>=1.26,<3",
+    "pillow>=10.4,<13",
+    "pydantic>=2.8,<3",
+    "pyyaml>=6.0.2,<7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.11,<2",
+    "pre-commit>=3.8,<5",
+    "pytest>=8.3,<10",
+    "pytest-cov>=5,<8",
+    "ruff>=0.6,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vlpr"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+src = ["app", "scripts", "src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+files = ["app", "scripts", "src", "tests"]
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-config --strict-markers"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["vlpr"]

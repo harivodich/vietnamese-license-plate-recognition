@@ -1,0 +1,18 @@
+dataset:
+  handle: miahuynh04/vietnamese-license-plate-detection
+  version: 1
+  country: VN
+  expected_license: MIT
+  raw_dir: data/raw/kaggle
+  manifest_path: data/interim/manifest.jsonl
+
+validation:
+  image_extensions: [".jpg", ".jpeg", ".png", ".bmp", ".webp"]
+  near_duplicate_hamming_distance: 6
+  manual_review_sample_size: 100
+
+split:
+  train: 0.75
+  validation: 0.125
+  test: 0.125
+  seed: 20260701
