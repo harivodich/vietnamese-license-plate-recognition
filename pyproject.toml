@@ -12,8 +12,10 @@ license = { file = "LICENSE" }
 authors = [{ name = "VLPR contributors" }]
 dependencies = [
     "kagglehub>=0.3.13,<1",
+    "kagglesdk>=0.1.14,<0.1.24",
     "numpy>=1.26,<3",
     "pillow>=10.4,<13",
+    "pip-system-certs>=5.3,<6; sys_platform == 'win32'",
     "pydantic>=2.8,<3",
     "pyyaml>=6.0.2,<7",
 ]
