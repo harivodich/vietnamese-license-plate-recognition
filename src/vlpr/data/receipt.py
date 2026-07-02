@@ -1,4 +1,4 @@
-"""Typed completion receipts and deterministic raw-data fingerprints."""
+"""Receipt có kiểm tra kiểu và fingerprint xác định cho dữ liệu raw."""
 
 import hashlib
 import json
@@ -14,7 +14,7 @@ RECEIPT_NAME = "download_receipt.json"
 
 
 class DownloadReceipt(BaseModel):
-    """Evidence that one immutable source download completed."""
+    """Bằng chứng một nguồn dữ liệu bất biến đã tải và fingerprint hoàn tất."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -33,7 +33,7 @@ class DownloadReceipt(BaseModel):
 
 
 def fingerprint_directory(directory: Path) -> tuple[str, int, int]:
-    """Return a deterministic digest, file count, and byte count for a directory tree."""
+    """Tính SHA-256 xác định, số file và tổng byte cho toàn bộ cây thư mục."""
     digest = hashlib.sha256()
     file_count = 0
     total_bytes = 0
@@ -53,7 +53,7 @@ def fingerprint_directory(directory: Path) -> tuple[str, int, int]:
 
 
 def read_receipt(target_dir: Path) -> DownloadReceipt | None:
-    """Read a valid completion receipt, returning None for missing or corrupt files."""
+    """Đọc receipt hợp lệ; trả ``None`` khi file thiếu, hỏng hoặc sai schema."""
     try:
         raw: Any = json.loads((target_dir / RECEIPT_NAME).read_text(encoding="utf-8"))
         return DownloadReceipt.model_validate(raw)
@@ -66,7 +66,7 @@ def receipt_matches(
     dataset_name: str,
     dataset: DatasetSettings,
 ) -> bool:
-    """Check whether a receipt identifies the configured immutable source."""
+    """Kiểm tra receipt có đúng tên, Kaggle handle và version trong cấu hình không."""
     return bool(
         receipt is not None
         and receipt.dataset_name == dataset_name
@@ -81,7 +81,7 @@ def write_receipt(
     dataset: DatasetSettings,
     resolved_download: Path,
 ) -> DownloadReceipt:
-    """Fingerprint staged content and write its typed completion receipt."""
+    """Fingerprint dữ liệu staging, tạo receipt có kiểu rồi ghi receipt xuống đĩa."""
     tree_sha256, file_count, total_bytes = fingerprint_directory(staging_dir)
     try:
         layout_root = resolved_download.relative_to(staging_dir).as_posix()
@@ -110,6 +110,7 @@ def write_receipt(
 
 
 def _fingerprint_file(path: Path) -> tuple[str, int]:
+    """Đọc file theo chunk 1 MiB để tính SHA-256 và kích thước mà không tốn nhiều RAM."""
     digest = hashlib.sha256()
     size = 0
     with path.open("rb") as stream:

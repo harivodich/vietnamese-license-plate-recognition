@@ -1,4 +1,4 @@
-"""Application-wide settings shared by training and inference."""
+"""Cấu hình dùng chung cho quá trình huấn luyện và suy luận."""
 
 from pathlib import Path
 from typing import Any, Literal
@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class ProjectSettings(BaseModel):
-    """Stable project identity and reproducibility settings."""
+    """Chứa định danh ổn định của dự án và seed dùng để tái lập thí nghiệm."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -17,7 +17,7 @@ class ProjectSettings(BaseModel):
 
 
 class TrackingSettings(BaseModel):
-    """Experiment-tracking policy."""
+    """Quy định nhà cung cấp và chế độ theo dõi thí nghiệm."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -27,7 +27,7 @@ class TrackingSettings(BaseModel):
 
 
 class RuntimeSettings(BaseModel):
-    """Root configuration used across project gates."""
+    """Gom các nhóm cấu hình runtime được dùng xuyên suốt các gate."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -36,7 +36,7 @@ class RuntimeSettings(BaseModel):
 
 
 def load_runtime_settings(path: Path) -> RuntimeSettings:
-    """Load typed runtime settings from YAML."""
+    """Đọc YAML runtime và chuyển thành object đã được Pydantic kiểm tra kiểu."""
     with path.open("r", encoding="utf-8") as stream:
         raw: Any = yaml.safe_load(stream)
     if not isinstance(raw, dict):

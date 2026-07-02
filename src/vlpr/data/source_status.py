@@ -1,4 +1,4 @@
-"""Check whether configured immutable raw sources are ready."""
+"""Kiểm tra các nguồn raw bất biến trong cấu hình đã sẵn sàng hay chưa."""
 
 import argparse
 import logging
@@ -13,7 +13,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def find_unready_sources(config_path: Path) -> tuple[str, ...]:
-    """Return configured dataset names without a matching completion receipt."""
+    """Trả về tên các dataset chưa có completion receipt khớp với cấu hình."""
     config = load_config(config_path)
     root = project_root(config_path)
     unready: list[str] = []
@@ -25,7 +25,7 @@ def find_unready_sources(config_path: Path) -> tuple[str, ...]:
 
 
 def build_parser(description: str) -> argparse.ArgumentParser:
-    """Build a shared source-readiness command-line parser."""
+    """Tạo parser dùng chung cho các command cần kiểm tra raw source."""
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument(
         "--config",
@@ -37,7 +37,7 @@ def build_parser(description: str) -> argparse.ArgumentParser:
 
 
 def run_source_check(argv: Sequence[str] | None, description: str) -> int:
-    """Run the Gate 1 readiness check used by later data commands."""
+    """Chạy kiểm tra readiness Gate 1 và trả exit code khác 0 nếu còn thiếu nguồn."""
     configure_logging()
     args = build_parser(description).parse_args(argv)
     unready = find_unready_sources(args.config)

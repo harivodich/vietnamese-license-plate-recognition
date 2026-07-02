@@ -1,11 +1,11 @@
-"""Logging configuration."""
+"""Cấu hình logging thống nhất cho script và dịch vụ."""
 
 import logging
 import os
 
 
 def configure_logging() -> None:
-    """Configure consistent logs for scripts and services."""
+    """Thiết lập level và format log chung, lấy level từ biến môi trường nếu có."""
     level_name = os.getenv("VLPR_LOG_LEVEL", "INFO").upper()
     level = getattr(logging, level_name, logging.INFO)
     logging.basicConfig(

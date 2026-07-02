@@ -1,4 +1,4 @@
-"""Read-only inspection of the local Python and accelerator environment."""
+"""Kiểm tra chỉ đọc đối với Python, package và phần cứng tăng tốc trên máy local."""
 
 import importlib
 import importlib.metadata
@@ -21,7 +21,7 @@ _PACKAGES: tuple[str, ...] = (
 
 @dataclass(frozen=True)
 class GpuInfo:
-    """Physical GPU information reported by the NVIDIA driver."""
+    """Biểu diễn thông tin GPU vật lý do NVIDIA driver cung cấp."""
 
     name: str
     memory_mib: int
@@ -30,7 +30,7 @@ class GpuInfo:
 
 @dataclass(frozen=True)
 class EnvironmentReport:
-    """Serializable snapshot of the current execution environment."""
+    """Ảnh chụp môi trường thực thi có thể chuyển thành JSON hoặc Markdown."""
 
     python_version: str
     operating_system: str
@@ -42,12 +42,12 @@ class EnvironmentReport:
     paddle_cuda_available: bool
 
     def to_json(self) -> str:
-        """Serialize the report for machines and CI logs."""
+        """Chuyển báo cáo thành JSON để script, CI hoặc con người có thể đọc."""
         return json.dumps(asdict(self), indent=2, ensure_ascii=False)
 
 
 def inspect_environment() -> EnvironmentReport:
-    """Collect environment facts without modifying installed packages."""
+    """Thu thập phiên bản Python, package và GPU mà không thay đổi môi trường."""
     cuda_build, cuda_available = _inspect_torch()
     return EnvironmentReport(
         python_version=platform.python_version(),
@@ -62,7 +62,7 @@ def inspect_environment() -> EnvironmentReport:
 
 
 def write_markdown_report(report: EnvironmentReport, output_path: Path) -> None:
-    """Write a human-readable, reproducible environment snapshot."""
+    """Ghi snapshot môi trường thành Markdown để lưu bằng chứng trong repository."""
     gpu_rows = (
         "\n".join(
             f"| {gpu.name} | {gpu.memory_mib} | {gpu.driver_version} |"
@@ -113,6 +113,7 @@ W&B dùng chế độ online khi có `WANDB_API_KEY`; nếu không có key thì 
 
 
 def _package_version(name: str) -> str | None:
+    """Trả về version đã cài của package hoặc ``None`` nếu package chưa tồn tại."""
     try:
         return importlib.metadata.version(name)
     except importlib.metadata.PackageNotFoundError:
@@ -120,6 +121,7 @@ def _package_version(name: str) -> str | None:
 
 
 def _inspect_torch() -> tuple[str | None, bool]:
+    """Kiểm tra PyTorch được build với CUDA nào và CUDA có thực sự khả dụng không."""
     try:
         torch: Any = importlib.import_module("torch")
     except ImportError:
@@ -128,6 +130,7 @@ def _inspect_torch() -> tuple[str | None, bool]:
 
 
 def _inspect_paddle() -> bool:
+    """Kiểm tra PaddlePaddle hiện tại có được build với CUDA hay không."""
     try:
         paddle: Any = importlib.import_module("paddle")
     except ImportError:
@@ -136,6 +139,7 @@ def _inspect_paddle() -> bool:
 
 
 def _inspect_nvidia_gpus() -> tuple[GpuInfo, ...]:
+    """Gọi ``nvidia-smi`` để lấy GPU vật lý; trả tuple rỗng nếu lệnh không khả dụng."""
     command = [
         "nvidia-smi",
         "--query-gpu=name,memory.total,driver_version",

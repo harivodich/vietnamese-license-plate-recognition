@@ -1,1 +1,1 @@
-"""API request and response schemas."""
+"""Các schema kiểm tra request và response của API."""

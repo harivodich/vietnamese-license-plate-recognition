@@ -1,4 +1,4 @@
-"""Typed project configuration."""
+"""Định nghĩa và kiểm tra kiểu cho cấu hình dataset của dự án."""
 
 from pathlib import Path
 from typing import Any
@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class DatasetSettings(BaseModel):
-    """Source dataset settings."""
+    """Mô tả một nguồn dataset cố định gồm định danh, phiên bản và đường dẫn lưu trữ."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -22,12 +22,12 @@ class DatasetSettings(BaseModel):
 
     @property
     def versioned_handle(self) -> str:
-        """Return an immutable Kaggle dataset handle."""
+        """Tạo Kaggle handle có version để luôn tải đúng một phiên bản dữ liệu."""
         return f"{self.handle}/versions/{self.version}"
 
 
 class ValidationSettings(BaseModel):
-    """Dataset quality thresholds."""
+    """Chứa các ngưỡng dùng khi kiểm định chất lượng và duplicate của dataset."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -37,7 +37,7 @@ class ValidationSettings(BaseModel):
 
 
 class SplitSettings(BaseModel):
-    """Group-aware split ratios and reproducibility seed."""
+    """Chứa tỷ lệ chia tập và seed để phép chia dữ liệu có thể tái lập."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -48,7 +48,7 @@ class SplitSettings(BaseModel):
 
     @model_validator(mode="after")
     def validate_sum(self) -> "SplitSettings":
-        """Reject ratios that do not form a complete partition."""
+        """Từ chối cấu hình nếu tổng tỷ lệ train, validation và test không bằng 1."""
         total = self.train + self.validation + self.test
         if abs(total - 1.0) > 1e-9:
             raise ValueError(f"split ratios must sum to 1.0, got {total}")
@@ -56,7 +56,7 @@ class SplitSettings(BaseModel):
 
 
 class ProjectConfig(BaseModel):
-    """Root dataset configuration."""
+    """Gom registry dataset, quy tắc validation và cấu hình split của dự án."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -66,7 +66,7 @@ class ProjectConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_dataset_registry(self) -> "ProjectConfig":
-        """Require the baseline dataset roles used by the project."""
+        """Bảo đảm cấu hình luôn có đủ hai nguồn detection và OCR bắt buộc."""
         required = {"detection", "ocr"}
         missing = required.difference(self.datasets)
         if missing:
@@ -75,7 +75,7 @@ class ProjectConfig(BaseModel):
         return self
 
     def dataset(self, name: str) -> DatasetSettings:
-        """Return one registered dataset by logical role."""
+        """Lấy cấu hình dataset theo tên logic và báo rõ các tên hợp lệ nếu không tồn tại."""
         try:
             return self.datasets[name]
         except KeyError as exc:
@@ -84,7 +84,7 @@ class ProjectConfig(BaseModel):
 
 
 def load_config(path: Path) -> ProjectConfig:
-    """Load and validate YAML before any data mutation."""
+    """Đọc YAML và kiểm tra toàn bộ schema trước khi thao tác lên dữ liệu."""
     with path.open("r", encoding="utf-8") as stream:
         raw: Any = yaml.safe_load(stream)
     if not isinstance(raw, dict):
@@ -93,7 +93,7 @@ def load_config(path: Path) -> ProjectConfig:
 
 
 def project_root(config_path: Path) -> Path:
-    """Resolve the repository root from a config stored under ``configs/``."""
+    """Suy ra thư mục gốc repository từ file cấu hình nằm trong thư mục ``configs``."""
     resolved = config_path.resolve()
     if resolved.parent.name != "configs":
         raise ValueError(f"config must be located in a configs directory: {resolved}")
@@ -101,7 +101,7 @@ def project_root(config_path: Path) -> Path:
 
 
 def resolve_project_path(root: Path, configured_path: Path) -> Path:
-    """Resolve a configured path and prevent accidental writes outside the repository."""
+    """Đổi đường dẫn cấu hình thành tuyệt đối và chặn đường dẫn thoát khỏi repository."""
     candidate = (root / configured_path).resolve()
     if not candidate.is_relative_to(root.resolve()):
         raise ValueError(f"path escapes project root: {configured_path}")

@@ -1,4 +1,4 @@
-"""Inspect the local ML runtime without installing or changing packages."""
+"""Kiểm tra ML runtime local mà không cài đặt hoặc thay đổi package."""
 
 import argparse
 from pathlib import Path
@@ -7,7 +7,7 @@ from vlpr.environment import inspect_environment, write_markdown_report
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the environment-check command-line interface."""
+    """Tạo parser cho tùy chọn xuất environment report ra Markdown."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--output",
@@ -18,7 +18,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
-    """Print an environment snapshot and optionally save Markdown."""
+    """In snapshot môi trường ra terminal và tùy chọn lưu thành Markdown."""
     args = build_parser().parse_args()
     report = inspect_environment()
     print(report.to_json())

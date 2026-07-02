@@ -1,4 +1,4 @@
-"""Reproducible Kaggle dataset download."""
+"""Tải dataset Kaggle theo quy trình có version, staging và khả năng tái lập."""
 
 import argparse
 import logging
@@ -17,6 +17,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def _publish_staging(staging_dir: Path, target_dir: Path, *, force: bool) -> None:
+    """Publish staging thành raw chính thức và khôi phục bản cũ nếu thao tác thay thế lỗi."""
     if not target_dir.exists():
         staging_dir.replace(target_dir)
         return
@@ -37,7 +38,7 @@ def _publish_staging(staging_dir: Path, target_dir: Path, *, force: bool) -> Non
 
 
 def _download_from_kaggle(versioned_handle: str, staging_dir: Path) -> Path:
-    """Adapt KaggleHub to the project's staging-directory contract."""
+    """Bọc KaggleHub để mọi dữ liệu luôn được tải vào staging do dự án quản lý."""
     return Path(
         kagglehub.dataset_download(
             versioned_handle,
@@ -52,7 +53,7 @@ def download_dataset(
     dataset_name: str = "detection",
     force: bool = False,
 ) -> Path:
-    """Download one pinned Kaggle dataset version and record retrieval metadata."""
+    """Tải một version dataset cố định, ghi receipt rồi publish nguyên tử vào raw."""
     config = load_config(config_path)
     dataset = config.dataset(dataset_name)
     root = project_root(config_path)
@@ -92,7 +93,7 @@ def download_dataset(
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the command-line parser."""
+    """Tạo parser cho các tham số config, tên dataset và tùy chọn tải lại."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--config",
@@ -114,7 +115,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Run the dataset download CLI."""
+    """Chạy CLI tải dataset và chuyển exception dự kiến thành exit code 1."""
     configure_logging()
     args = build_parser().parse_args(argv)
     try:

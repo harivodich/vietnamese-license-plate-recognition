@@ -1,4 +1,4 @@
-"""Download the pinned source dataset."""
+"""Entry point mỏng để tải đúng version dataset đã khai báo trong cấu hình."""
 
 from vlpr.data.download import main
 

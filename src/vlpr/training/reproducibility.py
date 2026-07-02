@@ -1,4 +1,4 @@
-"""Reproducibility controls for Python, NumPy, and optional ML frameworks."""
+"""Điều khiển tính tái lập cho Python, NumPy và các framework ML tùy chọn."""
 
 import importlib
 import os
@@ -9,7 +9,7 @@ import numpy as np
 
 
 def set_random_seed(seed: int, *, deterministic: bool = True) -> None:
-    """Seed available random generators before data loading or model creation."""
+    """Đặt cùng seed cho mọi bộ sinh số ngẫu nhiên trước khi tạo dữ liệu hoặc model."""
     if seed < 0:
         raise ValueError("seed must be non-negative")
 
@@ -21,7 +21,7 @@ def set_random_seed(seed: int, *, deterministic: bool = True) -> None:
 
 
 def _optional_module(name: str) -> Any | None:
-    """Import an optional framework without making it a core dependency."""
+    """Import framework tùy chọn và trả về ``None`` nếu môi trường chưa cài framework đó."""
     try:
         return importlib.import_module(name)
     except ImportError:
@@ -29,6 +29,7 @@ def _optional_module(name: str) -> Any | None:
 
 
 def _seed_torch(seed: int, *, deterministic: bool) -> None:
+    """Đặt seed PyTorch trên CPU/GPU và bật thuật toán deterministic khi được yêu cầu."""
     torch = _optional_module("torch")
     if torch is None:
         return
@@ -42,6 +43,7 @@ def _seed_torch(seed: int, *, deterministic: bool) -> None:
 
 
 def _seed_paddle(seed: int) -> None:
+    """Đặt seed cho PaddlePaddle nếu package này có trong môi trường."""
     paddle = _optional_module("paddle")
     if paddle is not None:
         paddle.seed(seed)

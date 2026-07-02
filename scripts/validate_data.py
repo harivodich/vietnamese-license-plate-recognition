@@ -1,4 +1,4 @@
-"""Validate dataset integrity and annotations."""
+"""Entry point mỏng để kiểm tra tính toàn vẹn dữ liệu và annotation."""
 
 from vlpr.data.validation import main
 

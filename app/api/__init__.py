@@ -1,1 +1,1 @@
-"""HTTP route modules."""
+"""Các module định nghĩa HTTP route."""
