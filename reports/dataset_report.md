@@ -2,10 +2,10 @@
 
 ## Status
 
-Detection and OCR are now treated as separate source datasets. The detection source has been
-downloaded and structurally inventoried. The OCR candidates have been inspected enough to choose a
-baseline OCR source, but they have not yet been fully audited for duplicates, image integrity, or
-label quality.
+Detection and OCR are treated as separate source datasets. Both selected sources have been
+downloaded into versioned immutable directories with typed completion receipts and deterministic
+content fingerprints. Detection has an earlier structural inventory; OCR has not yet been fully
+audited for duplicates, image integrity, or label quality.
 
 This split is intentional. For this project, "end-to-end" refers to the pipeline output, not to a
 requirement that one public dataset must contain every annotation type. Separate component datasets
@@ -15,9 +15,12 @@ are acceptable as long as the final benchmark set is frozen and human-verified.
 
 - Kaggle handle: `miahuynh04/vietnamese-license-plate-detection`
 - Dataset version: `1`
-- Retrieved at: `2026-07-01T07:28:32Z`
+- Retrieved at: `2026-07-02T03:00:16Z`
 - Data-card license claim: MIT
-- Downloaded size after extraction: 366,309,079 bytes
+- Versioned raw path: `data/raw/kaggle/detection/v1`
+- Receipt file count: 16,519
+- Receipt content size: 366,308,679 bytes
+- Content SHA-256: `51de1ea6a00699bffd8c9c8cd58fbeefa3eccdcb9404b8a276152ca31a1a0956`
 
 The license value above is not yet treated as verified provenance. A copy of the license or other
 primary evidence distributed with the dataset has not been found in the downloaded files.
@@ -53,6 +56,11 @@ Selected OCR baseline source:
 - Kaggle handle: `wirqhuy/vietnamese-license-plate-ocr`
 - Dataset version: `1`
 - Data-card license claim: MIT
+- Retrieved at: `2026-07-02T03:00:54Z`
+- Versioned raw path: `data/raw/kaggle/ocr/v1`
+- Receipt file count: 6,646
+- Receipt content size: 10,968,384 bytes
+- Content SHA-256: `a0042b3f9af82f38fbb1894f869e303cbbd6a25b8690ed834f1aeafeb676ede9`
 - Structure observed during inspection:
   - `imgs/train`: 5,314 images
   - `imgs/val`: 1,329 images
@@ -88,6 +96,7 @@ This dataset contains YOLO detection labels only and does not provide OCR string
 ## Current limitations
 
 - The source-provided split has not been accepted as the project split.
+- Completion receipts prove source identity and byte-level contents, not annotation correctness.
 - No video, vehicle, capture-session, or duplicate group identifiers are present.
 - The selected OCR dataset has text labels, but it is not paired with full-scene plate bounding
   boxes from the detection dataset.
@@ -95,3 +104,5 @@ This dataset contains YOLO detection labels only and does not provide OCR string
 - Bounding boxes have not yet been checked visually.
 - Exact and near-duplicate leakage has not yet been measured.
 - A final end-to-end test set with human-verified plate text still needs to be built.
+- A legacy unversioned detection download remains under `data/raw/kaggle`; it is ignored by the
+  configured pipeline and has not been deleted automatically.

@@ -39,6 +39,7 @@ class EnvironmentReport:
     physical_gpus: tuple[GpuInfo, ...]
     torch_cuda_build: str | None
     torch_cuda_available: bool
+    paddle_cuda_available: bool
 
     def to_json(self) -> str:
         """Serialize the report for machines and CI logs."""
@@ -56,6 +57,7 @@ def inspect_environment() -> EnvironmentReport:
         physical_gpus=_inspect_nvidia_gpus(),
         torch_cuda_build=cuda_build,
         torch_cuda_available=cuda_available,
+        paddle_cuda_available=_inspect_paddle(),
     )
 
 
@@ -85,6 +87,7 @@ Report này được sinh bởi
 - Logical CPU: `{report.logical_cpu_count}`
 - PyTorch runtime hiện dùng: **{runtime}**
 - CUDA build của PyTorch: `{report.torch_cuda_build or "không có"}`
+- PaddlePaddle CUDA khả dụng: `{report.paddle_cuda_available}`
 
 ## GPU vật lý
 
@@ -104,8 +107,7 @@ Máy local chỉ được xem là GPU runtime khi framework báo CUDA khả dụ
 không đồng nghĩa PyTorch hiện tại sử dụng được GPU. Train nặng sẽ dùng cloud nếu dòng
 `PyTorch runtime hiện dùng` là `CPU`; local vẫn dùng để phát triển, test và inference CPU.
 
-PaddlePaddle/PaddleOCR chỉ được cài ở gate OCR. W&B dùng chế độ online khi có
-`WANDB_API_KEY`; nếu không có key thì tự chuyển sang offline.
+W&B dùng chế độ online khi có `WANDB_API_KEY`; nếu không có key thì tự chuyển sang offline.
 """
     output_path.write_text(content, encoding="utf-8")
 
@@ -123,6 +125,14 @@ def _inspect_torch() -> tuple[str | None, bool]:
     except ImportError:
         return None, False
     return torch.version.cuda, bool(torch.cuda.is_available())
+
+
+def _inspect_paddle() -> bool:
+    try:
+        paddle: Any = importlib.import_module("paddle")
+    except ImportError:
+        return False
+    return bool(paddle.device.is_compiled_with_cuda())
 
 
 def _inspect_nvidia_gpus() -> tuple[GpuInfo, ...]:

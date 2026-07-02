@@ -32,3 +32,11 @@ support or model correctness.
 Cloud and local benchmark results must be reported separately with their hardware details. A
 future CUDA-enabled PyTorch installation may replace the CPU build only after a compatibility
 smoke test; it must not be assumed from `nvidia-smi` output alone.
+
+## Runtime update: 2026-07-02
+
+The shared `HariAI` environment now contains PyTorch 2.6.0 with CUDA 12.4. A real CUDA matrix
+multiplication completed successfully on the Quadro M2200, so local detection experiments may use
+this GPU with conservative batch sizes. PaddlePaddle 3.3.1 is currently a CPU build. The hybrid
+decision remains valid: cloud GPU is used when local VRAM or training time is insufficient, and
+results from different hardware remain separate.

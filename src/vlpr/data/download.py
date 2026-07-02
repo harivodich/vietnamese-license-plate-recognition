@@ -1,18 +1,50 @@
 """Reproducible Kaggle dataset download."""
 
 import argparse
-import json
 import logging
+import shutil
 from collections.abc import Sequence
-from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 import kagglehub
 
 from vlpr.config import load_config, project_root, resolve_project_path
+from vlpr.data.receipt import RECEIPT_NAME, read_receipt, receipt_matches, write_receipt
 from vlpr.utils.logging import configure_logging
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _publish_staging(staging_dir: Path, target_dir: Path, *, force: bool) -> None:
+    if not target_dir.exists():
+        staging_dir.replace(target_dir)
+        return
+    if not force:
+        raise FileExistsError(
+            f"incomplete dataset directory already exists: {target_dir}; "
+            "inspect it and rerun with --force to replace it"
+        )
+
+    backup_dir = target_dir.with_name(f".{target_dir.name}.backup-{uuid4().hex}")
+    target_dir.replace(backup_dir)
+    try:
+        staging_dir.replace(target_dir)
+    except OSError:
+        backup_dir.replace(target_dir)
+        raise
+    shutil.rmtree(backup_dir)
+
+
+def _download_from_kaggle(versioned_handle: str, staging_dir: Path) -> Path:
+    """Adapt KaggleHub to the project's staging-directory contract."""
+    return Path(
+        kagglehub.dataset_download(
+            versioned_handle,
+            output_dir=str(staging_dir),
+            force_download=True,
+        )
+    ).resolve()
 
 
 def download_dataset(
@@ -25,38 +57,37 @@ def download_dataset(
     dataset = config.dataset(dataset_name)
     root = project_root(config_path)
     output_dir = resolve_project_path(root, dataset.raw_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    existing_receipt = read_receipt(output_dir)
+    if receipt_matches(existing_receipt, dataset_name, dataset) and not force:
+        LOGGER.info("Dataset already complete name=%s output=%s", dataset_name, output_dir)
+        return output_dir
+    if output_dir.exists() and not force:
+        raise FileExistsError(
+            f"incomplete or mismatched dataset directory already exists: {output_dir}; "
+            "inspect it and rerun with --force to replace it"
+        )
+
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    staging_dir = output_dir.with_name(f".{output_dir.name}.tmp-{uuid4().hex}")
+    staging_dir.mkdir()
 
     LOGGER.info(
-        "Downloading dataset name=%s handle=%s output=%s",
+        "Downloading dataset name=%s handle=%s staging=%s",
         dataset_name,
         dataset.versioned_handle,
-        output_dir,
+        staging_dir,
     )
-    resolved_download = Path(
-        kagglehub.dataset_download(
-            dataset.versioned_handle,
-            output_dir=str(output_dir),
-            force_download=force,
-        )
-    ).resolve()
+    try:
+        resolved_download = _download_from_kaggle(dataset.versioned_handle, staging_dir)
+        if not any(path.is_file() for path in staging_dir.rglob("*")):
+            raise RuntimeError(f"Kaggle download produced no files: {staging_dir}")
+        write_receipt(staging_dir, dataset_name, dataset, resolved_download)
+        _publish_staging(staging_dir, output_dir, force=force)
+    except Exception:
+        shutil.rmtree(staging_dir, ignore_errors=True)
+        raise
 
-    metadata = {
-        "dataset_name": dataset_name,
-        "dataset_task": dataset.task,
-        "dataset_handle": dataset.handle,
-        "dataset_version": dataset.version,
-        "dataset_url": f"https://www.kaggle.com/datasets/{dataset.handle}",
-        "expected_license_from_data_card": dataset.expected_license,
-        "retrieved_at_utc": datetime.now(timezone.utc).isoformat(),
-        "resolved_download_path": str(resolved_download),
-    }
-    metadata_path = output_dir / "download_metadata.json"
-    metadata_path.write_text(
-        json.dumps(metadata, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    LOGGER.info("Dataset download completed metadata=%s", metadata_path)
+    LOGGER.info("Dataset download completed receipt=%s", output_dir / RECEIPT_NAME)
     return output_dir
 
 

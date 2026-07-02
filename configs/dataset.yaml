@@ -5,7 +5,7 @@ datasets:
     country: VN
     task: detection
     expected_license: MIT
-    raw_dir: data/raw/kaggle/detection
+    raw_dir: data/raw/kaggle/detection/v1
     manifest_path: data/interim/detection_manifest.jsonl
 
   ocr:
@@ -14,7 +14,7 @@ datasets:
     country: VN
     task: ocr
     expected_license: MIT
-    raw_dir: data/raw/kaggle/ocr
+    raw_dir: data/raw/kaggle/ocr/v1
     manifest_path: data/interim/ocr_manifest.jsonl
 
 validation:

@@ -8,8 +8,9 @@ Report này được sinh bởi
 - Python: `3.12.9`
 - Hệ điều hành: `Windows-10-10.0.19045-SP0`
 - Logical CPU: `8`
-- PyTorch runtime hiện dùng: **CPU**
-- CUDA build của PyTorch: `không có`
+- PyTorch runtime hiện dùng: **GPU**
+- CUDA build của PyTorch: `12.4`
+- PaddlePaddle CUDA khả dụng: `False`
 
 ## GPU vật lý
 
@@ -21,10 +22,10 @@ Report này được sinh bởi
 
 | Package | Version |
 |---|---|
-| `torch` | 2.6.0 |
-| `ultralytics` | chưa cài |
-| `paddlepaddle` | chưa cài |
-| `paddleocr` | chưa cài |
+| `torch` | 2.6.0+cu124 |
+| `ultralytics` | 8.4.84 |
+| `paddlepaddle` | 3.3.1 |
+| `paddleocr` | 3.7.0 |
 | `wandb` | 0.28.0 |
 
 ## Kết luận Gate 0
@@ -33,5 +34,4 @@ Máy local chỉ được xem là GPU runtime khi framework báo CUDA khả dụ
 không đồng nghĩa PyTorch hiện tại sử dụng được GPU. Train nặng sẽ dùng cloud nếu dòng
 `PyTorch runtime hiện dùng` là `CPU`; local vẫn dùng để phát triển, test và inference CPU.
 
-PaddlePaddle/PaddleOCR chỉ được cài ở gate OCR. W&B dùng chế độ online khi có
-`WANDB_API_KEY`; nếu không có key thì tự chuyển sang offline.
+W&B dùng chế độ online khi có `WANDB_API_KEY`; nếu không có key thì tự chuyển sang offline.

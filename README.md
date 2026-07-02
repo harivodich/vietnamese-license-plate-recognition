@@ -74,6 +74,11 @@ This is deliberate. The detection source provides full-scene vehicle images with
 boxes, while the OCR source provides cropped plate images with text labels. We will evaluate them
 independently before measuring the combined pipeline.
 
+Raw sources are versioned under `data/raw/kaggle/<task>/v<version>`. Every completed source has a
+`download_receipt.json` containing its identity, retrieval time, file count, byte count, and
+deterministic content fingerprint. Re-running a completed download is a no-op unless `--force` is
+explicitly supplied.
+
 ## Quality commands
 
 ```powershell

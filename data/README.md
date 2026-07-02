@@ -12,6 +12,20 @@ Data files are intentionally excluded from Git.
 Never manually edit `raw/`. Fix parsing or annotation issues through a reviewed correction
 manifest so the transformation remains reproducible.
 
+Each Kaggle source is stored by logical task and immutable source version:
+
+```text
+raw/kaggle/
+├── detection/v1/
+│   └── download_receipt.json
+└── ocr/v1/
+    └── download_receipt.json
+```
+
+Downloads are first written to a temporary sibling directory. The downloader publishes that
+directory only after it has calculated the file count, byte count, and content fingerprint. A
+matching completion receipt makes repeated commands idempotent.
+
 ## Credentials
 
 Public Kaggle downloads normally work without credentials. If Kaggle requests authentication,
