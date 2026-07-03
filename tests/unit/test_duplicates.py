@@ -2,11 +2,14 @@
 
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 from vlpr.data.duplicates import (
     ImageFingerprint,
+    NearDuplicatePair,
     find_exact_duplicate_groups,
+    find_near_duplicate_pairs,
     fingerprint_image,
 )
 
@@ -51,3 +54,61 @@ def test_find_exact_duplicate_groups_is_deterministic() -> None:
         (Path("a-1.jpg"), Path("a-2.jpg")),
         (Path("z-1.jpg"), Path("z-2.jpg")),
     )
+
+
+def test_find_near_duplicate_pairs_filters_candidates_by_distance() -> None:
+    """Xác nhận banding không biến candidate xa thành near-duplicate."""
+    fingerprints = [
+        ImageFingerprint(Path("base.jpg"), "sha-a", "0000000000000000"),
+        ImageFingerprint(Path("near.jpg"), "sha-b", "0000000000000003"),
+        ImageFingerprint(Path("far.jpg"), "sha-c", "ffffffffffffffff"),
+    ]
+
+    pairs = find_near_duplicate_pairs(fingerprints, max_distance=2)
+
+    assert pairs == (
+        NearDuplicatePair(
+            first=Path("base.jpg"),
+            second=Path("near.jpg"),
+            distance=2,
+        ),
+    )
+
+
+def test_find_near_duplicate_pairs_excludes_exact_duplicates() -> None:
+    """Xác nhận cùng SHA-256 chỉ xuất hiện trong nhóm exact duplicate."""
+    fingerprints = [
+        ImageFingerprint(Path("copy-1.jpg"), "same-sha", "0000000000000000"),
+        ImageFingerprint(Path("copy-2.jpg"), "same-sha", "0000000000000000"),
+    ]
+
+    assert find_near_duplicate_pairs(fingerprints, max_distance=6) == ()
+
+
+def test_find_near_duplicate_pairs_is_deterministic() -> None:
+    """Xác nhận thứ tự input không làm thay đổi hướng hoặc thứ tự cặp."""
+    fingerprints = [
+        ImageFingerprint(Path("z.jpg"), "sha-z", "0000000000000001"),
+        ImageFingerprint(Path("a.jpg"), "sha-a", "0000000000000000"),
+    ]
+
+    pairs = find_near_duplicate_pairs(reversed(fingerprints), max_distance=1)
+
+    assert pairs == (
+        NearDuplicatePair(
+            first=Path("a.jpg"),
+            second=Path("z.jpg"),
+            distance=1,
+        ),
+    )
+
+
+def test_find_near_duplicate_pairs_rejects_invalid_input() -> None:
+    """Xác nhận threshold và perceptual hash sai được báo trước khi audit."""
+    valid = ImageFingerprint(Path("valid.jpg"), "sha", "0000000000000000")
+    invalid = ImageFingerprint(Path("invalid.jpg"), "sha", "not-a-hash")
+
+    with pytest.raises(ValueError, match="0 đến 63"):
+        find_near_duplicate_pairs([valid], max_distance=64)
+    with pytest.raises(ValueError, match="16 ký tự"):
+        find_near_duplicate_pairs([invalid], max_distance=6)
