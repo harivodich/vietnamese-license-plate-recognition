@@ -1,8 +1,45 @@
-"""Kiểm thử parser chuyển một dòng YOLO thành detection annotation."""
+"""Kiểm thử parser chuyển dòng hoặc file YOLO thành detection annotation."""
+
+from pathlib import Path
 
 import pytest
 
-from vlpr.data.detection_parser import AnnotationParseError, parse_yolo_line
+from vlpr.data.detection_parser import AnnotationParseError, parse_yolo_file, parse_yolo_line
+
+
+def test_parse_yolo_file_preserves_annotation_order(tmp_path: Path) -> None:
+    """Xác nhận parser file giữ thứ tự bbox và bỏ qua dòng trắng."""
+    label_path = tmp_path / "sample.txt"
+    label_path.write_text(
+        "0 0.25 0.25 0.1 0.1\n\n0 0.75 0.75 0.2 0.2\n",
+        encoding="utf-8",
+    )
+
+    annotations = parse_yolo_file(label_path)
+
+    assert len(annotations) == 2
+    assert annotations[0].bbox.center_x == pytest.approx(0.25)
+    assert annotations[1].bbox.center_x == pytest.approx(0.75)
+
+
+def test_parse_yolo_file_returns_empty_tuple_for_empty_label(tmp_path: Path) -> None:
+    """Xác nhận label không có annotation được biểu diễn bằng tuple rỗng."""
+    label_path = tmp_path / "empty.txt"
+    label_path.write_text("", encoding="utf-8")
+
+    assert parse_yolo_file(label_path) == ()
+
+
+def test_parse_yolo_file_reports_failing_line_number(tmp_path: Path) -> None:
+    """Xác nhận lỗi trong file chứa cả đường dẫn và số dòng gây lỗi."""
+    label_path = tmp_path / "broken.txt"
+    label_path.write_text(
+        "0 0.25 0.25 0.1 0.1\n\n0 invalid 0.5 0.1 0.1\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AnnotationParseError, match=r"broken.txt:3:"):
+        parse_yolo_file(label_path)
 
 
 def test_parse_yolo_line_returns_annotation_for_real_sample() -> None:

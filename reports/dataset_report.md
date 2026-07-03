@@ -4,8 +4,9 @@
 
 Detection and OCR are treated as separate source datasets. Both selected sources have been
 downloaded into versioned immutable directories with typed completion receipts and deterministic
-content fingerprints. Detection has an earlier structural inventory; OCR has not yet been fully
-audited for duplicates, image integrity, or label quality.
+content fingerprints. Both sources have passed the initial structural, pairing, label parsing, and
+full-image decode checks. Duplicate detection, statistical analysis, and manual annotation review
+are not yet complete.
 
 This split is intentional. For this project, "end-to-end" refers to the pipeline output, not to a
 requirement that one public dataset must contain every annotation type. Separate component datasets
@@ -47,7 +48,14 @@ The initial structural scan found:
 - zero empty label files;
 - no rows with a field count other than five;
 - no normalized coordinate values outside `[0, 1]`;
+- all 8,259 images decode successfully;
+- all 8,452 bounding boxes pass the typed YOLO schema;
 - no OCR text labels.
+
+Seventeen boxes touch an image boundary and exceed the mathematical edge by approximately
+`5e-7` after their source values are rounded to six decimal places. The schema accepts boundary
+error up to `1e-6`, while retaining the original values and rejecting material overflow. Raw
+annotations are not clamped or edited.
 
 ## OCR source decision
 
@@ -73,6 +81,17 @@ imgs/train/type5_258.jpg    BT 5581
 imgs/train/type7_527.jpg    51G 46455
 imgs/val/type4_628.jpg      73B 0040
 ```
+
+The initial OCR structural scan found:
+
+- 5,314 train image-label pairs;
+- 1,329 validation image-label pairs;
+- zero missing images;
+- zero unreferenced images;
+- zero empty paths or labels;
+- exactly one tab separator in every label row;
+- all 6,643 images decode successfully;
+- UTF-8 labels include spaces and the Vietnamese character `Đ`.
 
 Secondary OCR source kept for possible augmentation only:
 
@@ -100,9 +119,11 @@ This dataset contains YOLO detection labels only and does not provide OCR string
 - No video, vehicle, capture-session, or duplicate group identifiers are present.
 - The selected OCR dataset has text labels, but it is not paired with full-scene plate bounding
   boxes from the detection dataset.
-- Images have not yet been decoded to detect corruption or measure resolution.
+- Image dimensions and aspect-ratio distributions have not yet been summarized.
 - Bounding boxes have not yet been checked visually.
 - Exact and near-duplicate leakage has not yet been measured.
+- The initial whole-dataset audit has not yet been integrated into the reproducible validation
+  command or manifest generation workflow.
 - A final end-to-end test set with human-verified plate text still needs to be built.
 - A legacy unversioned detection download remains under `data/raw/kaggle`; it is ignored by the
   configured pipeline and has not been deleted automatically.

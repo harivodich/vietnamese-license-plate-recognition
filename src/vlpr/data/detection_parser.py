@@ -1,4 +1,6 @@
-"""Chuyển annotation YOLO dạng text thành schema detection có kiểm tra kiểu."""
+"""Chuyển dòng hoặc file YOLO thành schema detection có kiểm tra kiểu."""
+
+from pathlib import Path
 
 from pydantic import ValidationError
 
@@ -7,6 +9,23 @@ from vlpr.data.manifest_schema import DetectionAnnotation, YoloBox
 
 class AnnotationParseError(ValueError):
     """Báo một dòng annotation không thể chuyển thành dữ liệu detection hợp lệ."""
+
+
+def parse_yolo_file(path: Path) -> tuple[DetectionAnnotation, ...]:
+    """Đọc một label file YOLO và parse mọi dòng không rỗng theo đúng thứ tự."""
+    annotations: list[DetectionAnnotation] = []
+    lines = path.read_text(encoding="utf-8").splitlines()
+    for line_number, line in enumerate(lines, start=1):
+        if not line.strip():
+            continue
+        annotations.append(
+            parse_yolo_line(
+                line,
+                source=str(path),
+                line_number=line_number,
+            )
+        )
+    return tuple(annotations)
 
 
 def parse_yolo_line(

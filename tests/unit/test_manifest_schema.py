@@ -34,6 +34,18 @@ def test_yolo_box_rejects_edge_outside_image() -> None:
         YoloBox(center_x=0.05, center_y=0.5, width=0.2, height=0.1)
 
 
+def test_yolo_box_accepts_six_decimal_boundary_rounding() -> None:
+    """Xác nhận sai số làm tròn sáu chữ số không tạo lỗi vượt biên giả."""
+    box = YoloBox(
+        center_x=0.436667,
+        center_y=0.954082,
+        width=0.176667,
+        height=0.091837,
+    )
+
+    assert box.center_y + box.height / 2 == pytest.approx(1.0000005)
+
+
 def test_detection_annotation_rejects_unknown_class() -> None:
     """Xác nhận project một class không chấp nhận class id ngoài 0."""
     with pytest.raises(ValidationError):
