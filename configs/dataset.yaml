@@ -21,6 +21,7 @@ validation:
   image_extensions: [".jpg", ".jpeg", ".png", ".bmp", ".webp"]
   near_duplicate_hamming_distance: 6
   manual_review_sample_size: 100
+  report_path: data/interim/dataset_audit.json
 
 split:
   train: 0.75

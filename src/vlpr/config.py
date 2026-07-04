@@ -32,8 +32,9 @@ class ValidationSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     image_extensions: tuple[str, ...]
-    near_duplicate_hamming_distance: int = Field(ge=0, le=64)
+    near_duplicate_hamming_distance: int = Field(ge=0, le=63)
     manual_review_sample_size: int = Field(ge=100)
+    report_path: Path = Path("data/interim/dataset_audit.json")
 
 
 class SplitSettings(BaseModel):

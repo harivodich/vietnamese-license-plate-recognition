@@ -21,3 +21,4 @@ def test_config_exposes_detection_and_ocr_datasets() -> None:
     assert config.dataset("ocr").task == "ocr"
     assert config.dataset("detection").raw_dir.as_posix().endswith("detection/v1")
     assert config.dataset("ocr").raw_dir.as_posix().endswith("ocr/v1")
+    assert config.validation.report_path.as_posix() == "data/interim/dataset_audit.json"

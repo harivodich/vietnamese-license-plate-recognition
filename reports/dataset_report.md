@@ -5,8 +5,8 @@
 Detection and OCR are treated as separate source datasets. Both selected sources have been
 downloaded into versioned immutable directories with typed completion receipts and deterministic
 content fingerprints. Both sources have passed the initial structural, pairing, label parsing, and
-full-image decode checks. Duplicate detection, statistical analysis, and manual annotation review
-are not yet complete.
+full-image decode checks. Automated statistics and duplicate detection are complete. Near-duplicate
+candidate review and manual annotation review are not yet complete.
 
 This split is intentional. For this project, "end-to-end" refers to the pipeline output, not to a
 requirement that one public dataset must contain every annotation type. Separate component datasets
@@ -57,6 +57,16 @@ Seventeen boxes touch an image boundary and exceed the mathematical edge by appr
 error up to `1e-6`, while retaining the original values and rejecting material overflow. Raw
 annotations are not clamped or edited.
 
+Measured detection statistics:
+
+| Property | Minimum | Median | Maximum |
+|---|---:|---:|---:|
+| Image width (pixels) | 216 | 472 | 4,653 |
+| Image height (pixels) | 159 | 303 | 2,910 |
+| Normalized bbox width | 0.015625 | 0.190678 | 0.703333 |
+| Normalized bbox height | 0.011662 | 0.115512 | 0.668750 |
+| Normalized bbox area | 0.000210 | 0.023270 | 0.470354 |
+
 ## OCR source decision
 
 Selected OCR baseline source:
@@ -93,6 +103,52 @@ The initial OCR structural scan found:
 - all 6,643 images decode successfully;
 - UTF-8 labels include spaces and the Vietnamese character `Đ`.
 
+Measured OCR statistics:
+
+| Property | Minimum | Median | Maximum |
+|---|---:|---:|---:|
+| Crop width (pixels) | 9 | 46 | 556 |
+| Crop height (pixels) | 6 | 31 | 350 |
+| Raw text length | 5 | 9 | 11 |
+
+The observed character set is:
+
+```text
+ 0123456789ABCDEFGHIJKLMNOPQRSTUVXYZĐ
+```
+
+## Duplicate audit
+
+The audit uses SHA-256 for exact duplicates and 64-bit difference hashes for near-duplicate
+candidates. Near candidates use a Hamming-distance threshold of 6.
+
+| Task | Exact groups | Exact groups crossing source splits | Near candidate pairs | Near pairs crossing source splits |
+|---|---:|---:|---:|---:|
+| Detection | 4 | 1 | 9,888 | 3,332 |
+| OCR | 93 | 31 | 629 | 208 |
+
+Exact duplicates are byte-identical evidence. The source-provided splits therefore contain known
+leakage: one exact detection group and 31 exact OCR groups cross source split boundaries. The
+project split must keep each duplicate group together instead of trusting the source split.
+
+All four exact detection groups have slightly different bounding boxes for byte-identical images.
+Two exact OCR groups have conflicting text:
+
+```text
+imgs/train/car_338.jpg -> 30A 34588
+imgs/train/car_352.jpg -> 30A 31588
+
+imgs/train/car_553.jpg -> 30G 31553
+imgs/train/car_522.jpg -> 80G 31553
+```
+
+These conflicts require manual review and a separate correction manifest. Raw labels are not
+modified in place.
+
+Near-duplicate counts are candidate counts, not confirmed duplicate counts. The high detection
+count shows that the current dHash threshold also retrieves visually similar layouts. Candidates
+must be visualized and sampled before they are used to create final duplicate groups.
+
 Secondary OCR source kept for possible augmentation only:
 
 - Kaggle handle: `topkek69/vietnamese-license-plate-ocr`
@@ -119,11 +175,10 @@ This dataset contains YOLO detection labels only and does not provide OCR string
 - No video, vehicle, capture-session, or duplicate group identifiers are present.
 - The selected OCR dataset has text labels, but it is not paired with full-scene plate bounding
   boxes from the detection dataset.
-- Image dimensions and aspect-ratio distributions have not yet been summarized.
 - Bounding boxes have not yet been checked visually.
-- Exact and near-duplicate leakage has not yet been measured.
-- The initial whole-dataset audit has not yet been integrated into the reproducible validation
-  command or manifest generation workflow.
+- Near-duplicate candidates have not yet been visually confirmed.
+- Exact-duplicate annotation conflicts have not yet been manually resolved.
+- The 100 detection and 100 OCR manual-review samples have not yet been completed.
 - A final end-to-end test set with human-verified plate text still needs to be built.
 - A legacy unversioned detection download remains under `data/raw/kaggle`; it is ignored by the
   configured pipeline and has not been deleted automatically.
