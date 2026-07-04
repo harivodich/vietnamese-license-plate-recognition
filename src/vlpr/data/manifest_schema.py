@@ -1,8 +1,9 @@
-"""Các schema kiểm tra kiểu cho từng record trong manifest dữ liệu."""
+"""Các schema kiểm tra kiểu cho annotation và record trong manifest dữ liệu."""
 
-from typing import Literal
+from pathlib import PurePosixPath
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 _YOLO_BOUNDARY_TOLERANCE = 1e-6
 
@@ -43,3 +44,66 @@ class DetectionAnnotation(BaseModel):
     class_id: Literal[0] = 0
     class_name: Literal["license_plate"] = "license_plate"
     bbox: YoloBox
+
+
+class OcrAnnotation(BaseModel):
+    """Lưu nguyên văn nội dung biển số từ nguồn OCR, chưa chuẩn hóa."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    raw_text: str
+
+    @field_validator("raw_text")
+    @classmethod
+    def validate_non_empty_text(cls, value: str) -> str:
+        """Từ chối nhãn OCR chỉ chứa khoảng trắng nhưng không sửa raw text."""
+        if not value.strip():
+            raise ValueError("raw_text không được rỗng")
+        return value
+
+
+class _ManifestRecordBase(BaseModel):
+    """Định nghĩa metadata chung của mọi ảnh trong manifest."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    sample_id: str = Field(min_length=1)
+    dataset_name: str = Field(min_length=1)
+    image_path: str = Field(min_length=1)
+    source_split: str = Field(min_length=1)
+    width: int = Field(gt=0)
+    height: int = Field(gt=0)
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    perceptual_hash: str = Field(pattern=r"^[0-9a-f]{16}$")
+    group_id: str | None = None
+    split: Literal["train", "validation", "test"] | None = None
+    validation_status: Literal["valid", "warning", "invalid"] = "valid"
+
+    @field_validator("image_path")
+    @classmethod
+    def validate_image_path(cls, value: str) -> str:
+        """Chỉ chấp nhận đường dẫn POSIX tương đối nằm bên trong dataset."""
+        path = PurePosixPath(value)
+        if "\\" in value or path.is_absolute() or ".." in path.parts:
+            raise ValueError("image_path phải là đường dẫn POSIX tương đối")
+        return value
+
+
+class DetectionManifestRecord(_ManifestRecordBase):
+    """Mô tả một ảnh detection cùng toàn bộ bounding box của ảnh."""
+
+    task: Literal["detection"]
+    annotations: tuple[DetectionAnnotation, ...]
+
+
+class OcrManifestRecord(_ManifestRecordBase):
+    """Mô tả một ảnh crop OCR cùng nội dung biển số nguyên bản."""
+
+    task: Literal["ocr"]
+    annotation: OcrAnnotation
+
+
+ManifestRecord = Annotated[
+    DetectionManifestRecord | OcrManifestRecord,
+    Field(discriminator="task"),
+]
