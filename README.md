@@ -62,6 +62,7 @@ python scripts/download_data.py --config configs/dataset.yaml --dataset detectio
 python scripts/download_data.py --config configs/dataset.yaml --dataset ocr
 python scripts/prepare_data.py --config configs/dataset.yaml
 python scripts/validate_data.py --config configs/dataset.yaml
+python scripts/create_review_samples.py --config configs/dataset.yaml
 python scripts/split_data.py --config configs/dataset.yaml
 ```
 

@@ -22,6 +22,7 @@ validation:
   near_duplicate_hamming_distance: 6
   manual_review_sample_size: 100
   report_path: data/interim/dataset_audit.json
+  review_dir: data/interim/manual_review
 
 split:
   train: 0.75

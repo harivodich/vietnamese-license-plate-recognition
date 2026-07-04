@@ -149,6 +149,25 @@ Near-duplicate counts are candidate counts, not confirmed duplicate counts. The 
 count shows that the current dHash threshold also retrieves visually similar layouts. Candidates
 must be visualized and sampled before they are used to create final duplicate groups.
 
+## Manual-review queue
+
+A deterministic review queue has been generated from the manifest and audit fingerprints:
+
+```text
+data/interim/manual_review/86998f01-20bc6900-20260701/
+```
+
+It contains:
+
+- 100 detection visualizations with bounding boxes overlaid;
+- 100 OCR visualizations with the raw label below each crop;
+- `review_queue.jsonl` with the sample id, source path, priority reasons, and `pending` status.
+
+The queue prioritizes annotation conflicts, exact duplicates crossing source splits, and the closest
+near-duplicate candidates before filling the remaining capacity with a seeded random sample.
+Generating the queue does not count as completing manual review: no sample is marked approved,
+rejected, or corrected until a person records that decision separately.
+
 Secondary OCR source kept for possible augmentation only:
 
 - Kaggle handle: `topkek69/vietnamese-license-plate-ocr`
@@ -178,7 +197,7 @@ This dataset contains YOLO detection labels only and does not provide OCR string
 - Bounding boxes have not yet been checked visually.
 - Near-duplicate candidates have not yet been visually confirmed.
 - Exact-duplicate annotation conflicts have not yet been manually resolved.
-- The 100 detection and 100 OCR manual-review samples have not yet been completed.
+- The 100 detection and 100 OCR review queues exist, but human decisions have not yet been recorded.
 - A final end-to-end test set with human-verified plate text still needs to be built.
 - A legacy unversioned detection download remains under `data/raw/kaggle`; it is ignored by the
   configured pipeline and has not been deleted automatically.

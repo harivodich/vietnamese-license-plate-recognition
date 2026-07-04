@@ -35,6 +35,7 @@ class ValidationSettings(BaseModel):
     near_duplicate_hamming_distance: int = Field(ge=0, le=63)
     manual_review_sample_size: int = Field(ge=100)
     report_path: Path = Path("data/interim/dataset_audit.json")
+    review_dir: Path = Path("data/interim/manual_review")
 
 
 class SplitSettings(BaseModel):
