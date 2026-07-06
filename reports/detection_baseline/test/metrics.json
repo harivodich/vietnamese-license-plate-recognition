@@ -1,0 +1,16 @@
+{
+  "checkpoint_sha256": "70289013711ab5da541c2a3b6eb44052756c0dfd6ff3ef16039ad83a5856ca3c",
+  "image_count": 1032,
+  "instance_count": 1049,
+  "map50": 0.9944489654993188,
+  "map50_95": 0.7245949371107503,
+  "precision": 0.9942737609147739,
+  "recall": 0.9931442336036342,
+  "speed_ms_per_image": {
+    "inference": 11.788650484499327,
+    "loss": 0.009477034875668013,
+    "postprocess": 5.1879983527052635,
+    "preprocess": 3.5894347868214718
+  },
+  "split": "test"
+}

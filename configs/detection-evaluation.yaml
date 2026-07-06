@@ -1,0 +1,16 @@
+checkpoint: artifacts/detection/yolo11n-baseline/weights/best.pt
+data: data/processed/detection_yolo/dataset.yaml
+project: artifacts/detection
+name: yolo11n-baseline-test
+split: test
+imgsz: 640
+batch: 8
+workers: 4
+device: 0
+conf: 0.001
+iou: 0.7
+max_det: 300
+plots: true
+operating_conf: 0.25
+match_iou: 0.5
+failure_examples: 25

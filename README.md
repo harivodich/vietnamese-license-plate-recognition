@@ -91,11 +91,16 @@ Install the detection dependencies, validate the frozen experiment contract, the
 python -m pip install -e ".[data,detection,tracking,dev]"
 python scripts/train_detection.py --config configs/detection-baseline.yaml --check-only
 python scripts/train_detection.py --config configs/detection-baseline.yaml
+python scripts/evaluate_detection.py --config configs/detection-evaluation.yaml --check-only
+python scripts/evaluate_detection.py --config configs/detection-evaluation.yaml
+python scripts/analyze_detection_errors.py --config configs/detection-evaluation.yaml
 ```
 
 `--check-only` validates the strict training config, dataset YAML, and all three non-empty image
 lists without loading model weights or starting a training run. The baseline config records image
 size, batch size, optimizer, learning rate, epochs, augmentation, seed, and deterministic mode.
+The evaluation config locks the checkpoint and `test` split, while the error-analysis command
+reports recall by plate size at a fixed confidence and IoU operating point.
 
 Detailed explanation of the training code, metrics, checkpoints, resume flow, and model tradeoffs:
 [Detection training guide](docs/detection-training-guide.md).

@@ -1,0 +1,84 @@
+{
+  "confidence_threshold": 0.25,
+  "failure_examples": [
+    {
+      "false_negatives": 5,
+      "false_positives": 0,
+      "image": "01_87d381eed951a5ccf2c1cd5ef25ddadc468fa8e09a3c9815e37bfcbbede40010.jpg"
+    },
+    {
+      "false_negatives": 0,
+      "false_positives": 2,
+      "image": "02_227e5e17f7b9ae208ae4fe719f99063f2a6ce879eefdb4407b6dbf465f188e47.jpg"
+    },
+    {
+      "false_negatives": 0,
+      "false_positives": 1,
+      "image": "03_fccc508d9a75d9da193b124276d360a542acd7f83427a6ccdbf1414a8b424c4b.jpg"
+    },
+    {
+      "false_negatives": 0,
+      "false_positives": 1,
+      "image": "04_c046919167a247840796b7ae883037a9f87d11b1ea97d57e13166608a0f8777b.jpg"
+    },
+    {
+      "false_negatives": 0,
+      "false_positives": 1,
+      "image": "05_b6e8706945352f3a77d2edd4bc69d3830d592da93726f000f9781de52da5e4a0.jpg"
+    },
+    {
+      "false_negatives": 0,
+      "false_positives": 1,
+      "image": "06_a5d08f35a6b75c6cda61e08d1a58a6719773cf94ae28c00389b99340a2cdeffc.jpg"
+    },
+    {
+      "false_negatives": 0,
+      "false_positives": 1,
+      "image": "07_1b7c9a552e136f831b0dca0a90bbd370d577912d76ba171663c633833c1c27bd.jpg"
+    },
+    {
+      "false_negatives": 0,
+      "false_positives": 1,
+      "image": "08_7bdc840b3f3278a5b46efcdbae304a2c36085b90daa635639390606c94b51ef0.jpg"
+    },
+    {
+      "false_negatives": 0,
+      "false_positives": 1,
+      "image": "09_e5a13e2011e3711de5b16b6740dfc3c791a2406b51a17011a924bfda0226a033.jpg"
+    },
+    {
+      "false_negatives": 0,
+      "false_positives": 1,
+      "image": "10_9330ce4040e6692a17c904d8cf9cb9398bca3210cbf4a7cc294834e38499e0a1.jpg"
+    },
+    {
+      "false_negatives": 0,
+      "false_positives": 1,
+      "image": "11_6a31ebd447a95d0f546ddad8f84eb3babd27c4d3b3a2b01f0ca27f0b9b552f24.jpg"
+    }
+  ],
+  "false_negative_count": 5,
+  "false_positive_count": 11,
+  "ground_truth_count": 1049,
+  "image_count": 1032,
+  "match_iou_threshold": 0.5,
+  "matched_count": 1044,
+  "prediction_count": 1055,
+  "recall_by_size": {
+    "large": {
+      "instances": 367,
+      "matched": 367,
+      "recall": 1.0
+    },
+    "medium": {
+      "instances": 601,
+      "matched": 601,
+      "recall": 1.0
+    },
+    "small": {
+      "instances": 81,
+      "matched": 76,
+      "recall": 0.9382716049382716
+    }
+  }
+}
