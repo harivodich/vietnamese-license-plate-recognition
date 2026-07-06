@@ -16,6 +16,7 @@ datasets:
     expected_license: MIT
     raw_dir: data/raw/kaggle/ocr/v1
     manifest_path: data/interim/ocr_manifest.jsonl
+    corrections_path: configs/ocr-corrections.jsonl
 
 validation:
   image_extensions: [".jpg", ".jpeg", ".png", ".bmp", ".webp"]
@@ -23,9 +24,13 @@ validation:
   manual_review_sample_size: 100
   report_path: data/interim/dataset_audit.json
   review_dir: data/interim/manual_review
+  detection_eda_dir: reports/figures/detection
+  ocr_eda_dir: reports/figures/ocr
 
 split:
   train: 0.75
   validation: 0.125
   test: 0.125
-  seed: 20260701
+  seed: 42
+  output_dir: data/processed
+  detection_yolo_dir: data/processed/detection_yolo

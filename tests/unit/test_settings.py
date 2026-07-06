@@ -11,6 +11,6 @@ def test_load_runtime_settings() -> None:
 
     settings = load_runtime_settings(config_path)
 
-    assert settings.project.seed == 20260701
+    assert settings.project.seed == 42
     assert settings.tracking.provider == "wandb"
     assert settings.tracking.mode == "auto"

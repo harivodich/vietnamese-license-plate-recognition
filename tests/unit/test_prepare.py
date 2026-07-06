@@ -40,7 +40,7 @@ split:
   train: 0.75
   validation: 0.125
   test: 0.125
-  seed: 20260701
+  seed: 42
 """.lstrip(),
         encoding="utf-8",
     )

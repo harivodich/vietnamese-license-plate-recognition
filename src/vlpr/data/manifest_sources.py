@@ -3,6 +3,7 @@
 from collections.abc import Iterator
 from pathlib import Path
 
+from vlpr.data.corrections import OcrCorrection, apply_ocr_corrections
 from vlpr.data.manifest import build_detection_record, build_ocr_record
 from vlpr.data.manifest_schema import DetectionManifestRecord, OcrManifestRecord
 from vlpr.data.ocr_parser import OcrLabel, parse_ocr_file
@@ -56,6 +57,7 @@ def iter_ocr_records(
     *,
     dataset_name: str,
     image_extensions: tuple[str, ...],
+    corrections: dict[str, OcrCorrection] | None = None,
 ) -> Iterator[OcrManifestRecord]:
     """Đọc hai label file OCR, kiểm tra pairing rồi tạo record theo thứ tự nguồn."""
     dataset_root = raw_root / _OCR_DIRECTORY
@@ -81,14 +83,19 @@ def iter_ocr_records(
     }
     _validate_matching_paths(set(referenced_paths), actual_paths)
 
-    for source_split, split_labels in labels_by_split:
-        for label in split_labels:
-            yield build_ocr_record(
-                dataset_root=dataset_root,
-                label=label,
-                dataset_name=dataset_name,
-                source_split=source_split,
-            )
+    source_split_by_path = {
+        label.image_path.as_posix(): source_split
+        for source_split, split_labels in labels_by_split
+        for label in split_labels
+    }
+    corrected_labels = apply_ocr_corrections(tuple(labels), corrections or {})
+    for label in corrected_labels:
+        yield build_ocr_record(
+            dataset_root=dataset_root,
+            label=label,
+            dataset_name=dataset_name,
+            source_split=source_split_by_path[label.image_path.as_posix()],
+        )
 
 
 def _index_by_stem(paths: Iterator[Path], *, source: str) -> dict[str, Path]:

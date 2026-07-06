@@ -24,6 +24,7 @@ data = [
     "pillow>=10.4,<13",
 ]
 detection = [
+    "matplotlib>=3.9,<4",
     "torch>=2.6,<3",
     "ultralytics>=8.3,<9",
 ]

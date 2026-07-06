@@ -2,7 +2,6 @@
 
 import hashlib
 import json
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
@@ -25,7 +24,6 @@ class DownloadReceipt(BaseModel):
     dataset_version: int
     dataset_url: str
     expected_license_from_data_card: str
-    retrieved_at_utc: str
     layout_root: str
     content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     file_count: int = Field(ge=1)
@@ -56,7 +54,12 @@ def read_receipt(target_dir: Path) -> DownloadReceipt | None:
     """Đọc receipt hợp lệ; trả ``None`` khi file thiếu, hỏng hoặc sai schema."""
     try:
         raw: Any = json.loads((target_dir / RECEIPT_NAME).read_text(encoding="utf-8"))
-        return DownloadReceipt.model_validate(raw)
+        if not isinstance(raw, dict):
+            return None
+        supported = {
+            key: value for key, value in raw.items() if key in DownloadReceipt.model_fields
+        }
+        return DownloadReceipt.model_validate(supported)
     except (FileNotFoundError, json.JSONDecodeError, OSError, ValidationError):
         return None
 
@@ -96,7 +99,6 @@ def write_receipt(
         dataset_version=dataset.version,
         dataset_url=f"https://www.kaggle.com/datasets/{dataset.handle}",
         expected_license_from_data_card=dataset.expected_license,
-        retrieved_at_utc=datetime.now(timezone.utc).isoformat(),
         layout_root=layout_root,
         content_sha256=tree_sha256,
         file_count=file_count,

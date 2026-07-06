@@ -1,7 +1,6 @@
 # ADR 0002: Local CPU development with cloud GPU training
 
 - Status: accepted
-- Date: 2026-07-01
 
 ## Context
 
@@ -33,7 +32,7 @@ Cloud and local benchmark results must be reported separately with their hardwar
 future CUDA-enabled PyTorch installation may replace the CPU build only after a compatibility
 smoke test; it must not be assumed from `nvidia-smi` output alone.
 
-## Runtime update: 2026-07-02
+## Runtime update
 
 The shared `HariAI` environment now contains PyTorch 2.6.0 with CUDA 12.4. A real CUDA matrix
 multiplication completed successfully on the Quadro M2200, so local detection experiments may use

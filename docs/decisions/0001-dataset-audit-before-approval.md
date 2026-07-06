@@ -1,7 +1,6 @@
 # ADR 0001: Audit the Kaggle dataset before approving it
 
 - Status: accepted
-- Date: 2026-07-01
 
 ## Context
 

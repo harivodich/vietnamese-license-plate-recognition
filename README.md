@@ -64,6 +64,9 @@ python scripts/prepare_data.py --config configs/dataset.yaml
 python scripts/validate_data.py --config configs/dataset.yaml
 python scripts/create_review_samples.py --config configs/dataset.yaml
 python scripts/split_data.py --config configs/dataset.yaml
+python scripts/analyze_detection_data.py --config configs/dataset.yaml
+python scripts/analyze_ocr_data.py --config configs/dataset.yaml
+python scripts/export_detection_yolo.py --config configs/dataset.yaml
 ```
 
 The baseline data strategy uses two Kaggle datasets:
@@ -76,9 +79,26 @@ boxes, while the OCR source provides cropped plate images with text labels. We w
 independently before measuring the combined pipeline.
 
 Raw sources are versioned under `data/raw/kaggle/<task>/v<version>`. Every completed source has a
-`download_receipt.json` containing its identity, retrieval time, file count, byte count, and
+`download_receipt.json` containing its identity, file count, byte count, and
 deterministic content fingerprint. Re-running a completed download is a no-op unless `--force` is
 explicitly supplied.
+
+## Detection baseline
+
+Install the detection dependencies, validate the frozen experiment contract, then start training:
+
+```powershell
+python -m pip install -e ".[data,detection,tracking,dev]"
+python scripts/train_detection.py --config configs/detection-baseline.yaml --check-only
+python scripts/train_detection.py --config configs/detection-baseline.yaml
+```
+
+`--check-only` validates the strict training config, dataset YAML, and all three non-empty image
+lists without loading model weights or starting a training run. The baseline config records image
+size, batch size, optimizer, learning rate, epochs, augmentation, seed, and deterministic mode.
+
+Detailed explanation of the training code, metrics, checkpoints, resume flow, and model tradeoffs:
+[Detection training guide](docs/detection-training-guide.md).
 
 ## Quality commands
 

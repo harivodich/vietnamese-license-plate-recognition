@@ -78,6 +78,11 @@ class DetectionAudit(BaseModel):
     bbox_widths: NumericSummary | None
     bbox_heights: NumericSummary | None
     bbox_areas: NumericSummary | None
+    bbox_aspect_ratios: NumericSummary | None
+    bbox_center_x: NumericSummary | None
+    bbox_center_y: NumericSummary | None
+    class_counts: dict[str, int]
+    resized_bbox_size_counts: dict[str, int]
     duplicates: DuplicateAudit
 
 
@@ -90,8 +95,13 @@ class OcrAudit(BaseModel):
     manifest_sha256: str
     widths: NumericSummary
     heights: NumericSummary
+    crop_aspect_ratios: NumericSummary
     text_lengths: NumericSummary
+    normalized_text_lengths: NumericSummary
     character_set: str
+    character_counts: dict[str, int]
+    text_pattern_counts: dict[str, int]
+    invalid_character_count: int
     duplicates: DuplicateAudit
 
 
@@ -164,6 +174,11 @@ def _audit_detection(
 ) -> DetectionAudit:
     """Tính thống kê riêng cho ảnh và bounding box detection."""
     annotations = [annotation for record in records for annotation in record.annotations]
+    resized_areas = [
+        _resized_bbox_area(record, annotation.bbox.width, annotation.bbox.height)
+        for record in records
+        for annotation in record.annotations
+    ]
     return DetectionAudit(
         record_count=len(records),
         manifest_sha256=sha256_file(manifest_path),
@@ -181,6 +196,24 @@ def _audit_detection(
         bbox_areas=_optional_numeric_summary(
             [annotation.bbox.width * annotation.bbox.height for annotation in annotations]
         ),
+        bbox_aspect_ratios=_optional_numeric_summary(
+            [annotation.bbox.width / annotation.bbox.height for annotation in annotations]
+        ),
+        bbox_center_x=_optional_numeric_summary(
+            [annotation.bbox.center_x for annotation in annotations]
+        ),
+        bbox_center_y=_optional_numeric_summary(
+            [annotation.bbox.center_y for annotation in annotations]
+        ),
+        class_counts={
+            class_name: sum(annotation.class_name == class_name for annotation in annotations)
+            for class_name in sorted({annotation.class_name for annotation in annotations})
+        },
+        resized_bbox_size_counts={
+            "small": sum(area < 32**2 for area in resized_areas),
+            "medium": sum(32**2 <= area < 96**2 for area in resized_areas),
+            "large": sum(area >= 96**2 for area in resized_areas),
+        },
         duplicates=_audit_duplicates(
             records,
             max_distance,
@@ -203,13 +236,27 @@ def _audit_ocr(
 ) -> OcrAudit:
     """Tính thống kê riêng cho ảnh crop và raw OCR text."""
     texts = [record.annotation.raw_text for record in records]
+    character_counts = {
+        character: sum(text.count(character) for text in texts)
+        for character in sorted({character for text in texts for character in text})
+    }
+    patterns = [_ocr_text_pattern(text) for text in texts]
     return OcrAudit(
         record_count=len(records),
         manifest_sha256=sha256_file(manifest_path),
         widths=_numeric_summary([record.width for record in records]),
         heights=_numeric_summary([record.height for record in records]),
+        crop_aspect_ratios=_numeric_summary([record.width / record.height for record in records]),
         text_lengths=_numeric_summary([len(text) for text in texts]),
+        normalized_text_lengths=_numeric_summary([len(text.replace(" ", "")) for text in texts]),
         character_set="".join(sorted({character for text in texts for character in text})),
+        character_counts=character_counts,
+        text_pattern_counts={pattern: patterns.count(pattern) for pattern in sorted(set(patterns))},
+        invalid_character_count=sum(
+            character not in " 0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZĐ"
+            for text in texts
+            for character in text
+        ),
         duplicates=_audit_duplicates(
             records,
             max_distance,
@@ -289,3 +336,25 @@ def _numeric_summary(values: list[int] | list[float]) -> NumericSummary:
 def _optional_numeric_summary(values: list[float]) -> NumericSummary | None:
     """Trả None khi không có bbox, ngược lại trả thống kê số."""
     return _numeric_summary(values) if values else None
+
+
+def _resized_bbox_area(
+    record: DetectionManifestRecord,
+    normalized_width: float,
+    normalized_height: float,
+    *,
+    image_size: int = 640,
+) -> float:
+    """Tính diện tích bbox sau khi ảnh được letterbox về ô vuông huấn luyện."""
+    scale = min(image_size / record.width, image_size / record.height)
+    resized_width = normalized_width * record.width * scale
+    resized_height = normalized_height * record.height * scale
+    return resized_width * resized_height
+
+
+def _ocr_text_pattern(text: str) -> str:
+    """Rút nhãn OCR thành pattern D/L/space để audit cấu trúc mà không lộ nội dung."""
+    return "".join(
+        "D" if character.isdigit() else "L" if character.isalpha() else character
+        for character in text
+    )

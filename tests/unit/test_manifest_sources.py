@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from vlpr.data.corrections import OcrCorrection
 from vlpr.data.manifest_sources import (
     DatasetStructureError,
     iter_detection_records,
@@ -104,6 +105,31 @@ def test_iter_ocr_records_preserves_labels_and_order(tmp_path: Path) -> None:
         "30A 12345",
         "60MĐ1 01835",
     ]
+
+
+def test_iter_ocr_records_skips_excluded_correction(tmp_path: Path) -> None:
+    """Correction exclude loại record nhưng vẫn cho phép ảnh tồn tại trong raw source."""
+    _create_ocr_source(tmp_path)
+
+    records = tuple(
+        iter_ocr_records(
+            tmp_path,
+            dataset_name="ocr",
+            image_extensions=(".jpg",),
+            corrections={
+                "imgs/train/train.jpg": OcrCorrection(
+                    image_path="imgs/train/train.jpg",
+                    original_text="30A 12345",
+                    exclude=True,
+                    reason="Nhãn không đầy đủ.",
+                    review_method="visual_review",
+                )
+            },
+        )
+    )
+
+    assert [record.source_split for record in records] == ["val"]
+    assert [record.annotation.raw_text for record in records] == ["60MĐ1 01835"]
 
 
 def test_iter_ocr_records_rejects_unreferenced_image(tmp_path: Path) -> None:

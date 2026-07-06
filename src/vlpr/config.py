@@ -19,6 +19,7 @@ class DatasetSettings(BaseModel):
     expected_license: str = Field(min_length=1)
     raw_dir: Path
     manifest_path: Path
+    corrections_path: Path | None = None
 
     @property
     def versioned_handle(self) -> str:
@@ -36,6 +37,8 @@ class ValidationSettings(BaseModel):
     manual_review_sample_size: int = Field(ge=100)
     report_path: Path = Path("data/interim/dataset_audit.json")
     review_dir: Path = Path("data/interim/manual_review")
+    detection_eda_dir: Path = Path("reports/figures/detection")
+    ocr_eda_dir: Path = Path("reports/figures/ocr")
 
 
 class SplitSettings(BaseModel):
@@ -47,6 +50,8 @@ class SplitSettings(BaseModel):
     validation: float = Field(gt=0.0, lt=1.0)
     test: float = Field(gt=0.0, lt=1.0)
     seed: int = Field(ge=0)
+    output_dir: Path = Path("data/processed")
+    detection_yolo_dir: Path = Path("data/processed/detection_yolo")
 
     @model_validator(mode="after")
     def validate_sum(self) -> "SplitSettings":

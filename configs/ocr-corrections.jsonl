@@ -1,0 +1,5 @@
+{"image_path":"imgs/train/car_352.jpg","original_text":"30A 31588","corrected_text":"30A 34588","reason":"Ảnh hiển thị biển số 30A-345.88; nhãn nguồn sai ký tự thứ sáu.","review_method":"visual_review"}
+{"image_path":"imgs/train/car_522.jpg","original_text":"80G 31553","corrected_text":"30G 31553","reason":"Ảnh hiển thị biển số 30G-315.53; nhãn nguồn sai hai ký tự đầu.","review_method":"visual_review"}
+{"image_path":"imgs/train/car_390.jpg","original_text":"BOE90955","corrected_text":"30E 90955","reason":"Ảnh hiển thị biển số 30E-909.55; nhãn nguồn nhầm B/O với 3/0 và thiếu khoảng trắng.","review_method":"visual_review"}
+{"image_path":"imgs/train/car_150.jpg","original_text":"71578","corrected_text":null,"exclude":true,"reason":"Phần tiền tố biển số bị cháy sáng, nhãn nguồn chỉ chứa phần 715.78 nên không phải ground truth đầy đủ.","review_method":"visual_review"}
+{"image_path":"imgs/train/car_156.jpg","original_text":"71578","corrected_text":null,"exclude":true,"reason":"Phần tiền tố biển số bị cháy sáng, nhãn nguồn chỉ chứa phần 715.78 nên không phải ground truth đầy đủ.","review_method":"visual_review"}

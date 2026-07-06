@@ -1,5 +1,6 @@
 """Chọn mẫu ưu tiên và tạo visualization phục vụ kiểm tra thủ công."""
 
+import html
 import logging
 import os
 import random
@@ -190,6 +191,8 @@ def create_review_samples(config_path: Path) -> Path:
         queue.append(_queue_item(root, record, output_path, selection.reasons))
 
     _write_review_queue(review_root / "review_queue.jsonl", queue)
+    _write_review_galleries(review_root, root, queue)
+    _write_review_contact_sheets(review_root, root, queue)
     return review_root
 
 
@@ -260,6 +263,103 @@ def _write_review_queue(path: Path, items: list[ReviewQueueItem]) -> None:
     except Exception:
         temporary_path.unlink(missing_ok=True)
         raise
+
+
+def _write_review_galleries(
+    review_root: Path,
+    project_root_path: Path,
+    items: list[ReviewQueueItem],
+) -> None:
+    """Tạo các trang HTML nhỏ để review visualization theo lô 20 mẫu."""
+    page_size = 20
+    for task in ("detection", "ocr"):
+        task_items = [item for item in items if item.task == task]
+        for page_start in range(0, len(task_items), page_size):
+            page_items = task_items[page_start : page_start + page_size]
+            page_number = page_start // page_size + 1
+            cards: list[str] = []
+            for item in page_items:
+                absolute_visualization = project_root_path / item.visualization_path
+                relative_visualization = absolute_visualization.relative_to(review_root).as_posix()
+                detail = (
+                    f"raw_text={item.raw_text}"
+                    if item.raw_text is not None
+                    else f"bbox_count={item.bbox_count}"
+                )
+                cards.append(
+                    "<article>"
+                    f'<img src="{html.escape(relative_visualization)}" '
+                    f'alt="{html.escape(item.sample_id)}">'
+                    f"<strong>{html.escape(item.sample_id)}</strong>"
+                    f"<span>{html.escape(detail)}</span>"
+                    f"<span>split={html.escape(item.source_split)}</span>"
+                    f"<span>{html.escape(', '.join(item.reasons))}</span>"
+                    "</article>"
+                )
+            document = (
+                '<!doctype html><html lang="vi"><head><meta charset="utf-8">'
+                f"<title>{task} review page {page_number}</title>"
+                "<style>"
+                "body{font-family:Arial,sans-serif;margin:12px;background:#eee}"
+                "h1{font-size:20px}"
+                "main{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}"
+                "article{background:white;padding:8px;display:flex;flex-direction:column;"
+                "gap:3px;overflow:hidden}"
+                "img{width:100%;height:180px;object-fit:contain;background:#222}"
+                "strong,span{font-size:11px;overflow-wrap:anywhere}"
+                "</style></head><body>"
+                f"<h1>{task} — trang {page_number}</h1><main>"
+                + "".join(cards)
+                + "</main></body></html>"
+            )
+            page_path = review_root / f"{task}_{page_number:02d}.html"
+            page_path.write_text(document, encoding="utf-8", newline="\n")
+
+
+def _write_review_contact_sheets(
+    review_root: Path,
+    project_root_path: Path,
+    items: list[ReviewQueueItem],
+) -> None:
+    """Ghép visualization thành các sheet lossless để review theo lô 20 mẫu."""
+    columns = 4
+    rows = 5
+    card_width = 320
+    card_height = 250
+    page_size = columns * rows
+    font = ImageFont.load_default(size=14)
+    for task in ("detection", "ocr"):
+        task_items = [item for item in items if item.task == task]
+        for page_start in range(0, len(task_items), page_size):
+            page_items = task_items[page_start : page_start + page_size]
+            page_number = page_start // page_size + 1
+            sheet = Image.new(
+                "RGB",
+                (columns * card_width, rows * card_height),
+                "#dddddd",
+            )
+            draw = ImageDraw.Draw(sheet)
+            for index, item in enumerate(page_items):
+                row, column = divmod(index, columns)
+                x = column * card_width
+                y = row * card_height
+                visualization_path = project_root_path / item.visualization_path
+                with Image.open(visualization_path) as source:
+                    visualization = source.convert("RGB")
+                visualization.thumbnail((card_width - 12, 190), Image.Resampling.LANCZOS)
+                image_x = x + (card_width - visualization.width) // 2
+                sheet.paste(visualization, (image_x, y + 4))
+                detail = item.raw_text or f"bbox={item.bbox_count}"
+                text = (
+                    f"{page_start + index + 1:03d} {Path(item.image_path).name}\n"
+                    f"{detail} | {', '.join(item.reasons)}"
+                )
+                draw.text((x + 5, y + 198), text, fill="black", font=font)
+                draw.rectangle(
+                    (x, y, x + card_width - 1, y + card_height - 1),
+                    outline="#777777",
+                )
+            sheet.save(review_root / f"{task}_sheet_{page_number:02d}.png")
 
 
 def main(argv: Sequence[str] | None = None) -> int:

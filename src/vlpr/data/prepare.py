@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from vlpr.config import load_config, project_root, resolve_project_path
+from vlpr.data.corrections import read_ocr_corrections
 from vlpr.data.manifest_io import write_manifest
 from vlpr.data.manifest_sources import iter_detection_records, iter_ocr_records
 from vlpr.data.source_status import build_parser, find_unready_sources
@@ -34,12 +35,18 @@ def prepare_manifests(config_path: Path) -> dict[str, Path]:
     ocr = config.dataset("ocr")
     ocr_raw = resolve_project_path(root, ocr.raw_dir)
     ocr_manifest = resolve_project_path(root, ocr.manifest_path)
+    corrections = (
+        read_ocr_corrections(resolve_project_path(root, ocr.corrections_path))
+        if ocr.corrections_path is not None
+        else {}
+    )
     write_manifest(
         ocr_manifest,
         iter_ocr_records(
             ocr_raw,
             dataset_name="ocr",
             image_extensions=image_extensions,
+            corrections=corrections,
         ),
     )
 
