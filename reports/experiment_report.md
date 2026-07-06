@@ -111,3 +111,21 @@ Tracked evidence:
 - [test confusion matrix](detection_baseline/test/confusion_matrix.png);
 - [normalized test confusion matrix](detection_baseline/test/confusion_matrix_normalized.png);
 - [rendered failure examples](detection_baseline/test/failure_examples/).
+## OCR pretrained baseline
+
+Recognition-only PaddleOCR was evaluated on 818 fixed ground-truth test crops. The detector was not
+used in this experiment.
+
+| Metric | Value |
+| --- | ---: |
+| Full-plate exact match | 0.1944 |
+| Character error rate | 0.5938 |
+| Character accuracy | 0.4062 |
+| CPU inference latency | 62.86 ms/image |
+
+Compact crops have zero exact matches and CER `0.7883`, compared with exact match `0.4251` and CER
+`0.3477` for wide crops. Layout handling must therefore be tested on validation data before OCR
+fine-tuning.
+
+Detailed protocol, subgroup results, limitations, and sample-level evidence are in the
+[OCR baseline report](ocr_baseline/report.md).

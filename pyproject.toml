@@ -75,7 +75,7 @@ files = ["app", "scripts", "src", "tests"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["kagglehub", "wandb"]
+module = ["kagglehub", "paddleocr", "wandb"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

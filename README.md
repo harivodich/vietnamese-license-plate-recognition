@@ -105,6 +105,18 @@ reports recall by plate size at a fixed confidence and IoU operating point.
 Detailed explanation of the training code, metrics, checkpoints, resume flow, and model tradeoffs:
 [Detection training guide](docs/detection-training-guide.md).
 
+## OCR baseline
+
+Run recognition-only PaddleOCR on the fixed ground-truth test crops:
+
+```powershell
+python scripts/evaluate_ocr.py --config configs/ocr-baseline.yaml --check-only
+python scripts/evaluate_ocr.py --config configs/ocr-baseline.yaml
+```
+
+The baseline deliberately excludes the detector so OCR errors can be measured independently.
+Results and error analysis are documented in the
+[OCR baseline report](reports/ocr_baseline/report.md).
 ## Quality commands
 
 ```powershell
