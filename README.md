@@ -120,7 +120,7 @@ Results and error analysis are documented in the
 
 ## OCR training
 
-Prepare line-level OCR samples, validate the CRNN+CTC experiment, then start training:
+Prepare wide one-line OCR samples, validate the CRNN+CTC experiment, then start training:
 
 ```powershell
 python scripts/prepare_ocr_training.py --config configs/ocr-crnn.yaml
@@ -133,7 +133,7 @@ python scripts/train_ocr.py --config configs/ocr-crnn.yaml
 If training is interrupted, resume from the latest checkpoint:
 
 ```powershell
-python scripts/train_ocr.py --config configs/ocr-crnn.yaml --resume artifacts/ocr/crnn-ctc-baseline/last.pt
+python scripts/train_ocr.py --config configs/ocr-crnn.yaml --resume artifacts/ocr/crnn-ctc-wide-baseline/last.pt
 ```
 
 Detailed explanation of CRNN, CTC loss, metrics, checkpoints, resume flow, and tunable settings:

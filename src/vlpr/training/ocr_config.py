@@ -18,6 +18,7 @@ class OcrTrainingDataSettings(BaseModel):
     compact_aspect_ratio: float = Field(gt=0.0)
     split_search_start: float = Field(gt=0.0, lt=1.0)
     split_search_end: float = Field(gt=0.0, lt=1.0)
+    include_compact: bool
 
     @model_validator(mode="after")
     def validate_search_range(self) -> "OcrTrainingDataSettings":

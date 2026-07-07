@@ -1,10 +1,11 @@
 data:
   manifest: data/processed/ocr_manifest.jsonl
   dataset_root: data/raw/kaggle/ocr/v1/lp_ocr_dataset_vi
-  output_dir: data/processed/ocr_training
+  output_dir: data/processed/ocr_training_wide
   compact_aspect_ratio: 1.5
   split_search_start: 0.35
   split_search_end: 0.65
+  include_compact: false
 
 model:
   image_height: 32
@@ -36,4 +37,4 @@ train:
 
 output:
   project: artifacts/ocr
-  name: crnn-ctc-baseline
+  name: crnn-ctc-wide-baseline

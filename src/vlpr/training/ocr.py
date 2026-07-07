@@ -742,7 +742,7 @@ def tiny_overfit_ocr(
     config_path: Path,
     *,
     sample_count: int = 8,
-    steps: int = 300,
+    steps: int = 500,
 ) -> None:
     """Sanity check: model phải học thuộc được vài OCR line thật trước khi train full."""
     inputs = validate_ocr_training_experiment(config_path)

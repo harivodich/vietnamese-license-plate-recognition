@@ -107,6 +107,8 @@ def _materialize_record(
         image = opened.convert("RGB")
     tokens = record.annotation.raw_text.split()
     if image.width / image.height < settings.compact_aspect_ratio:
+        if not settings.include_compact:
+            return ()
         if len(tokens) != 2:
             raise ValueError(f"compact label phải có đúng 2 token: {record.sample_id}")
         top, bottom = split_compact_crop(

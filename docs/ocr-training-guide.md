@@ -51,7 +51,7 @@ Số mẫu hiện tại sau khi materialize:
 | Train | 7,595 |
 | Validation | 1,249 |
 
-Biển một dòng được giữ nguyên thành một sample. Biển hai dòng compact được tách thành hai sample: dòng trên và dòng dưới. Cách này biến bài toán khó “đọc cả ảnh hai dòng” thành bài toán đơn giản hơn “đọc từng dòng”.
+Baseline train đầu tiên dùng `include_compact: false`, nên chỉ giữ biển một dòng rộng. Biển hai dòng compact tạm thời bị loại khỏi training để tránh nhiễu từ bước split tự động. Sau khi one-line baseline học ổn, compact sẽ được đưa lại như một thí nghiệm riêng.
 
 ## CRNN là gì
 
@@ -119,14 +119,14 @@ python scripts/train_ocr.py --config configs/ocr-crnn.yaml
 Resume nếu máy tắt hoặc bị dừng:
 
 ```powershell
-python scripts/train_ocr.py --config configs/ocr-crnn.yaml --resume artifacts/ocr/crnn-ctc-baseline/last.pt
+python scripts/train_ocr.py --config configs/ocr-crnn.yaml --resume artifacts/ocr/crnn-ctc-wide-baseline/last.pt
 ```
 
 Trong CMD nên viết một dòng. Trong PowerShell có thể xuống dòng bằng dấu backtick.
 
 ## Train xong lưu những gì
 
-Trainer lưu vào `artifacts/ocr/crnn-ctc-baseline/`:
+Trainer lưu vào `artifacts/ocr/crnn-ctc-wide-baseline/`:
 
 - `last.pt`: checkpoint mới nhất, dùng để resume;
 - `best.pt`: checkpoint tốt nhất theo validation exact match;
