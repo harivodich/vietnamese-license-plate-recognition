@@ -56,6 +56,7 @@ class OcrOptimizationSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     epochs: int = Field(gt=0)
+    min_epochs: int = Field(gt=0)
     batch_size: int = Field(gt=0)
     workers: int = Field(ge=0)
     device: str = Field(min_length=1)
@@ -66,6 +67,13 @@ class OcrOptimizationSettings(BaseModel):
     gradient_clip_norm: float = Field(gt=0.0)
     patience: int = Field(ge=0)
     save_period: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def validate_epoch_policy(self) -> "OcrOptimizationSettings":
+        """Không cho early stopping chạy trước tổng số epoch hợp lệ."""
+        if self.min_epochs > self.epochs:
+            raise ValueError("min_epochs không được lớn hơn epochs")
+        return self
 
 
 class OcrOutputSettings(BaseModel):

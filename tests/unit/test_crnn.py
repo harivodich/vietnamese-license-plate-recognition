@@ -8,7 +8,11 @@ import torch
 from PIL import Image
 
 from vlpr.models.crnn import CrnnCtc, OcrCharset
-from vlpr.training.ocr import preprocess_ocr_image
+from vlpr.training.ocr import (
+    OcrSelectionScore,
+    _is_better_ocr_checkpoint,
+    preprocess_ocr_image,
+)
 
 
 def test_charset_encode_and_ctc_decode() -> None:
@@ -58,3 +62,19 @@ def test_preprocess_preserves_aspect_ratio_and_output_shape(tmp_path: Path) -> N
     assert tensor.dtype == torch.float32
     assert tensor.min() >= -1.0
     assert tensor.max() <= 1.0
+
+
+def test_ocr_checkpoint_selection_uses_cer_when_exact_match_ties() -> None:
+    """Khi exact còn bằng 0, CER tốt hơn vẫn phải được xem là checkpoint cải thiện."""
+    best = OcrSelectionScore(exact_match=0.0, cer=1.0, loss=3.2)
+    candidate = OcrSelectionScore(exact_match=0.0, cer=0.84, loss=3.0)
+
+    assert _is_better_ocr_checkpoint(candidate, best)
+
+
+def test_ocr_checkpoint_selection_prioritizes_exact_match_over_cer() -> None:
+    """Exact match cao hơn quan trọng hơn CER vì production cần đúng toàn bộ biển/dòng."""
+    best = OcrSelectionScore(exact_match=0.1, cer=0.2, loss=1.0)
+    candidate = OcrSelectionScore(exact_match=0.09, cer=0.1, loss=0.8)
+
+    assert not _is_better_ocr_checkpoint(candidate, best)

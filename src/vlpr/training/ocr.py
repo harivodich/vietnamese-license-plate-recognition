@@ -62,6 +62,15 @@ class OcrEpochMetrics:
 
 
 @dataclass(frozen=True)
+class OcrSelectionScore:
+    """Tiêu chí chọn checkpoint tốt nhất: đúng cả dòng trước, lỗi ký tự sau."""
+
+    exact_match: float
+    cer: float
+    loss: float
+
+
+@dataclass(frozen=True)
 class OcrTrainingInputs:
     """Config, dataset paths, charset và output đã qua preflight."""
 
@@ -401,6 +410,24 @@ def _validate_epoch(
     )
 
 
+def _is_better_ocr_checkpoint(
+    candidate: OcrSelectionScore,
+    best: OcrSelectionScore,
+    *,
+    epsilon: float = 1e-12,
+) -> bool:
+    """So sánh checkpoint ổn định khi exact match còn bằng 0 ở các epoch đầu."""
+    if candidate.exact_match > best.exact_match + epsilon:
+        return True
+    if candidate.exact_match < best.exact_match - epsilon:
+        return False
+    if candidate.cer < best.cer - epsilon:
+        return True
+    if candidate.cer > best.cer + epsilon:
+        return False
+    return candidate.loss < best.loss - epsilon
+
+
 def _save_checkpoint(
     path: Path,
     *,
@@ -408,7 +435,7 @@ def _save_checkpoint(
     model: CrnnCtc,
     optimizer: AdamW,
     scheduler: CosineAnnealingLR,
-    best_exact_match: float,
+    best_score: OcrSelectionScore,
     stale_epochs: int,
     inputs: OcrTrainingInputs,
 ) -> None:
@@ -421,7 +448,9 @@ def _save_checkpoint(
             "model_state": model.state_dict(),
             "optimizer_state": optimizer.state_dict(),
             "scheduler_state": scheduler.state_dict(),  # type: ignore[no-untyped-call]
-            "best_exact_match": best_exact_match,
+            "best_exact_match": best_score.exact_match,
+            "best_cer": best_score.cer,
+            "best_loss": best_score.loss,
             "stale_epochs": stale_epochs,
             "charset": inputs.charset.characters,
             "model_config": inputs.config.model.model_dump(),
@@ -429,6 +458,16 @@ def _save_checkpoint(
         temporary,
     )
     temporary.replace(path)
+
+
+def _clear_previous_ocr_run(output_dir: Path) -> None:
+    """Xóa artifact chuẩn của run cũ khi bắt đầu train mới không resume."""
+    for file_name in ("best.pt", "last.pt", "history.csv", "training_curves.png"):
+        path = output_dir / file_name
+        if path.exists():
+            path.unlink()
+    for path in output_dir.glob("epoch_*.pt"):
+        path.unlink()
 
 
 def _append_history(
@@ -509,7 +548,7 @@ def _load_resume(
     scheduler: CosineAnnealingLR,
     inputs: OcrTrainingInputs,
     device: torch.device,
-) -> tuple[int, float, int]:
+) -> tuple[int, OcrSelectionScore, int]:
     """Khôi phục model/optimizer/scheduler và từ chối config hoặc charset khác."""
     checkpoint: dict[str, Any] = torch.load(
         checkpoint_path,
@@ -523,9 +562,14 @@ def _load_resume(
     model.load_state_dict(checkpoint["model_state"])
     optimizer.load_state_dict(checkpoint["optimizer_state"])
     scheduler.load_state_dict(checkpoint["scheduler_state"])
+    best_score = OcrSelectionScore(
+        exact_match=float(checkpoint["best_exact_match"]),
+        cer=float(checkpoint.get("best_cer", float("inf"))),
+        loss=float(checkpoint.get("best_loss", float("inf"))),
+    )
     return (
         int(checkpoint["epoch"]) + 1,
-        float(checkpoint["best_exact_match"]),
+        best_score,
         int(checkpoint["stale_epochs"]),
     )
 
@@ -553,14 +597,14 @@ def train_ocr(
         eta_min=config.train.learning_rate * 0.01,
     )
     start_epoch = 1
-    best_exact_match = -1.0
+    best_score = OcrSelectionScore(exact_match=-1.0, cer=float("inf"), loss=float("inf"))
     stale_epochs = 0
     if resume_path is not None:
         root = project_root(config_path)
         checkpoint_path = resolve_project_path(root, resume_path)
         if not checkpoint_path.is_file():
             raise FileNotFoundError(f"không tìm thấy OCR checkpoint: {checkpoint_path}")
-        start_epoch, best_exact_match, stale_epochs = _load_resume(
+        start_epoch, best_score, stale_epochs = _load_resume(
             checkpoint_path,
             model=model,
             optimizer=optimizer,
@@ -571,6 +615,8 @@ def train_ocr(
 
     train_loader, validation_loader = _build_loaders(inputs)
     inputs.output_dir.mkdir(parents=True, exist_ok=True)
+    if resume_path is None:
+        _clear_previous_ocr_run(inputs.output_dir)
     history_path = inputs.output_dir / "history.csv"
     for epoch in range(start_epoch, config.train.epochs + 1):
         started = time.perf_counter()
@@ -600,17 +646,22 @@ def train_ocr(
             epoch_seconds=epoch_seconds,
         )
         scheduler.step()
-        improved = validation.exact_match > best_exact_match
+        candidate_score = OcrSelectionScore(
+            exact_match=validation.exact_match,
+            cer=validation.cer,
+            loss=validation.loss,
+        )
+        improved = _is_better_ocr_checkpoint(candidate_score, best_score)
         stale_epochs = 0 if improved else stale_epochs + 1
         if improved:
-            best_exact_match = validation.exact_match
+            best_score = candidate_score
             _save_checkpoint(
                 inputs.output_dir / "best.pt",
                 epoch=epoch,
                 model=model,
                 optimizer=optimizer,
                 scheduler=scheduler,
-                best_exact_match=best_exact_match,
+                best_score=best_score,
                 stale_epochs=stale_epochs,
                 inputs=inputs,
             )
@@ -620,7 +671,7 @@ def train_ocr(
             model=model,
             optimizer=optimizer,
             scheduler=scheduler,
-            best_exact_match=best_exact_match,
+            best_score=best_score,
             stale_epochs=stale_epochs,
             inputs=inputs,
         )
@@ -631,7 +682,7 @@ def train_ocr(
                 model=model,
                 optimizer=optimizer,
                 scheduler=scheduler,
-                best_exact_match=best_exact_match,
+                best_score=best_score,
                 stale_epochs=stale_epochs,
                 inputs=inputs,
             )
@@ -645,7 +696,11 @@ def train_ocr(
             validation.cer,
             epoch_seconds,
         )
-        if config.train.patience and stale_epochs >= config.train.patience:
+        if (
+            epoch >= config.train.min_epochs
+            and config.train.patience
+            and stale_epochs >= config.train.patience
+        ):
             LOGGER.info("early stopping after %d stale epochs", stale_epochs)
             break
     return inputs

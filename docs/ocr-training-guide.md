@@ -164,7 +164,9 @@ nghĩa là model có thể đang học thuộc train hoặc preprocessing/tách 
 
 `learning_rate: 0.001`: tốc độ cập nhật trọng số. Nếu loss dao động mạnh, giảm xuống `0.0005`.
 
-`patience: 10`: dừng sớm nếu validation exact match không cải thiện trong 10 epoch.
+`min_epochs: 30`: không cho early stopping dừng trước 30 epoch, vì OCR từ scratch thường chưa có exact match ở giai đoạn đầu.
+
+`patience: 15`: dừng sớm nếu checkpoint không còn cải thiện trong 15 epoch sau mốc tối thiểu. Cải thiện được xét theo exact match, rồi CER, rồi validation loss.
 
 `gradient_clip_norm: 5.0`: chặn gradient quá lớn để training LSTM ổn định hơn.
 
