@@ -129,3 +129,37 @@ fine-tuning.
 
 Detailed protocol, subgroup results, limitations, and sample-level evidence are in the
 [OCR baseline report](ocr_baseline/report.md).
+## OCR training preparation
+
+The trainable OCR baseline is prepared as a lightweight CRNN + CTC experiment. This keeps training local and reproducible on the same PyTorch stack used by the detector.
+
+Prepared line-level dataset:
+
+| Split | Line samples |
+| --- | ---: |
+| Train | 7,595 |
+| Validation | 1,249 |
+
+Compact two-line plates are split into top and bottom line crops before training. Wide one-line plates remain single line crops. This is intentional because the pretrained OCR baseline showed compact crops are the main failure group; line-level training makes the first trainable baseline simpler and easier to debug.
+
+Experiment contract:
+
+- config: `configs/ocr-crnn.yaml`;
+- preparation script: `scripts/prepare_ocr_training.py`;
+- training script: `scripts/train_ocr.py`;
+- training data output: `data/processed/ocr_training/`;
+- artifact output: `artifacts/ocr/crnn-ctc-baseline/`;
+- model: CRNN with CNN feature extractor, BiLSTM sequence encoder, and CTC loss;
+- input: grayscale OCR line image resized/padded to `32 x 160`;
+- epochs: `50` maximum;
+- batch size: `64`;
+- optimizer: AdamW;
+- learning rate: `0.001`;
+- early stopping: validation exact match patience `10`;
+- checkpointing: `last.pt`, `best.pt`, and periodic epoch checkpoints.
+
+Preflight and smoke-test completed successfully on the prepared dataset. Full training has not been run in this report yet; the user will run it locally and use the saved `history.csv`, `training_curves.png`, `best.pt`, and `last.pt` for the next evaluation step.
+
+Tracked guidance:
+
+- [OCR training guide](../docs/ocr-training-guide.md).

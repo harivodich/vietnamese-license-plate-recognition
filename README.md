@@ -117,6 +117,27 @@ python scripts/evaluate_ocr.py --config configs/ocr-baseline.yaml
 The baseline deliberately excludes the detector so OCR errors can be measured independently.
 Results and error analysis are documented in the
 [OCR baseline report](reports/ocr_baseline/report.md).
+
+## OCR training
+
+Prepare line-level OCR samples, validate the CRNN+CTC experiment, then start training:
+
+```powershell
+python scripts/prepare_ocr_training.py --config configs/ocr-crnn.yaml
+python scripts/train_ocr.py --config configs/ocr-crnn.yaml --check-only
+python scripts/train_ocr.py --config configs/ocr-crnn.yaml --smoke-test
+python scripts/train_ocr.py --config configs/ocr-crnn.yaml
+```
+
+If training is interrupted, resume from the latest checkpoint:
+
+```powershell
+python scripts/train_ocr.py --config configs/ocr-crnn.yaml --resume artifacts/ocr/crnn-ctc-baseline/last.pt
+```
+
+Detailed explanation of CRNN, CTC loss, metrics, checkpoints, resume flow, and tunable settings:
+[OCR training guide](docs/ocr-training-guide.md).
+
 ## Quality commands
 
 ```powershell

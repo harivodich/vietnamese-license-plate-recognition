@@ -30,6 +30,11 @@ def _optional_module(name: str) -> Any | None:
 
 def _seed_torch(seed: int, *, deterministic: bool) -> None:
     """Đặt seed PyTorch trên CPU/GPU và bật thuật toán deterministic khi được yêu cầu."""
+    if deterministic:
+        # CuBLAS reads this before CUDA kernels run; setting it here keeps CLI usage reproducible
+        # without requiring users to remember an extra shell variable.
+        os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
+
     torch = _optional_module("torch")
     if torch is None:
         return

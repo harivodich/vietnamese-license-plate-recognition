@@ -1,0 +1,37 @@
+data:
+  manifest: data/processed/ocr_manifest.jsonl
+  dataset_root: data/raw/kaggle/ocr/v1/lp_ocr_dataset_vi
+  output_dir: data/processed/ocr_training
+  compact_aspect_ratio: 1.5
+  split_search_start: 0.35
+  split_search_end: 0.65
+
+model:
+  image_height: 32
+  image_width: 160
+  hidden_size: 128
+  lstm_layers: 2
+  dropout: 0.1
+
+augmentation:
+  rotation_degrees: 2.0
+  brightness: 0.15
+  contrast: 0.15
+  blur_probability: 0.1
+
+train:
+  epochs: 50
+  batch_size: 64
+  workers: 4
+  device: cuda:0
+  seed: 42
+  deterministic: true
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  gradient_clip_norm: 5.0
+  patience: 10
+  save_period: 5
+
+output:
+  project: artifacts/ocr
+  name: crnn-ctc-baseline
