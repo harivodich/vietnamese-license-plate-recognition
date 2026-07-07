@@ -37,6 +37,7 @@ class OcrCrnnModelSettings(BaseModel):
     hidden_size: int = Field(gt=0)
     lstm_layers: int = Field(gt=0)
     dropout: float = Field(ge=0.0, lt=1.0)
+    blank_bias: float = Field(le=0.0)
 
 
 class OcrAugmentationSettings(BaseModel):

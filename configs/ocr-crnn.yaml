@@ -9,15 +9,16 @@ data:
 model:
   image_height: 32
   image_width: 160
-  hidden_size: 128
+  hidden_size: 256
   lstm_layers: 2
-  dropout: 0.1
+  dropout: 0.0
+  blank_bias: -2.0
 
 augmentation:
-  rotation_degrees: 2.0
-  brightness: 0.15
-  contrast: 0.15
-  blur_probability: 0.1
+  rotation_degrees: 0.0
+  brightness: 0.0
+  contrast: 0.0
+  blur_probability: 0.0
 
 train:
   epochs: 80

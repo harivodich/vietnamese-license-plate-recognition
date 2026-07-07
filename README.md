@@ -126,6 +126,7 @@ Prepare line-level OCR samples, validate the CRNN+CTC experiment, then start tra
 python scripts/prepare_ocr_training.py --config configs/ocr-crnn.yaml
 python scripts/train_ocr.py --config configs/ocr-crnn.yaml --check-only
 python scripts/train_ocr.py --config configs/ocr-crnn.yaml --smoke-test
+python scripts/train_ocr.py --config configs/ocr-crnn.yaml --tiny-overfit
 python scripts/train_ocr.py --config configs/ocr-crnn.yaml
 ```
 

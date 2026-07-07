@@ -102,6 +102,14 @@ Chạy smoke-test một batch train + một lượt validation nhỏ:
 python scripts/train_ocr.py --config configs/ocr-crnn.yaml --smoke-test
 ```
 
+Chạy tiny-overfit trước khi train full:
+
+```powershell
+python scripts/train_ocr.py --config configs/ocr-crnn.yaml --tiny-overfit
+```
+
+Tiny-overfit bắt model học thuộc vài ảnh OCR thật. Nếu bước này fail, không nên train full vì model/loss/preprocessing đang có lỗi cơ bản.
+
 Train full:
 
 ```powershell
@@ -158,9 +166,11 @@ nghĩa là model có thể đang học thuộc train hoặc preprocessing/tách 
 
 `image_width: 160`: canvas ngang cố định sau resize/pad. Nếu plate dài hơn nhiều, tăng width sẽ giúp nhưng tốn VRAM hơn.
 
-`hidden_size: 128`: kích thước LSTM. Tăng lên có thể mạnh hơn nhưng chậm hơn và dễ overfit hơn.
+`hidden_size: 256`: kích thước LSTM. OCR line nhỏ nhưng chuỗi có độ dài biến thiên, nên baseline dùng 256 để tránh underfit sớm.
 
 `batch_size: 64`: số ảnh dòng mỗi optimizer step. Nếu lỗi CUDA out of memory, giảm xuống `32` hoặc `16`.
+
+`blank_bias: -2.0`: giảm bias ban đầu của CTC blank class. CTC dễ collapse về blank hoặc chuỗi ngắn phổ biến; bias âm buộc model thử ký tự thật sớm hơn.
 
 `learning_rate: 0.001`: tốc độ cập nhật trọng số. Nếu loss dao động mạnh, giảm xuống `0.0005`.
 
@@ -199,6 +209,7 @@ Không nên đổi:
 python scripts/prepare_ocr_training.py --config configs/ocr-crnn.yaml
 python scripts/train_ocr.py --config configs/ocr-crnn.yaml --check-only
 python scripts/train_ocr.py --config configs/ocr-crnn.yaml --smoke-test
+python scripts/train_ocr.py --config configs/ocr-crnn.yaml --tiny-overfit
 ```
 
-Nếu ba lệnh trên pass, có thể bắt đầu train full. Nếu máy tắt, dùng lệnh `--resume` với `last.pt`.
+Nếu bốn lệnh trên pass, có thể bắt đầu train full. Nếu máy tắt, dùng lệnh `--resume` với `last.pt`.

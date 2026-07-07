@@ -265,6 +265,8 @@ def build_crnn(
         hidden_size=config.model.hidden_size,
         lstm_layers=config.model.lstm_layers,
         dropout=config.model.dropout,
+        blank_index=charset.blank_index,
+        blank_bias=config.model.blank_bias,
     )
 
 
@@ -362,7 +364,7 @@ def _train_epoch(
         batch = _move_batch(raw_batch, device)
         optimizer.zero_grad(set_to_none=True)
         loss = _ctc_loss(criterion, model(batch.images), batch)
-        loss.backward()  # type: ignore[no-untyped-call]  # type: ignore[no-untyped-call]
+        loss.backward()  # type: ignore[no-untyped-call]
         nn.utils.clip_grad_norm_(model.parameters(), gradient_clip_norm)
         optimizer.step()
         losses.append(float(loss.detach().cpu()))
@@ -373,6 +375,28 @@ def _decode_batch(log_probabilities: Tensor, charset: OcrCharset) -> tuple[str, 
     """Greedy decode toàn batch từ `[time, batch, classes]`."""
     indices = log_probabilities.argmax(dim=2).transpose(0, 1).cpu().tolist()
     return tuple(charset.decode(sequence) for sequence in indices)
+
+
+def _prediction_examples(
+    model: CrnnCtc,
+    loader: DataLoader[OcrBatch],
+    charset: OcrCharset,
+    *,
+    device: torch.device,
+    limit: int = 5,
+) -> tuple[tuple[str, str], ...]:
+    """Lấy vài dự đoán cố định để phát hiện CTC collapse ngay trong log train."""
+    model.eval()
+    raw_batch = next(iter(loader))
+    batch = _move_batch(raw_batch, device)
+    with torch.no_grad():
+        predictions = _decode_batch(model(batch.images), charset)
+    return tuple(zip(batch.labels[:limit], predictions[:limit], strict=True))
+
+
+def _format_prediction_examples(examples: tuple[tuple[str, str], ...]) -> str:
+    """Format ngắn để terminal đọc được khi đang train qua đêm."""
+    return "; ".join(f"{label}->{prediction or '<blank>'}" for label, prediction in examples)
 
 
 def _validate_epoch(
@@ -696,6 +720,14 @@ def train_ocr(
             validation.cer,
             epoch_seconds,
         )
+        if epoch == start_epoch or epoch % 5 == 0:
+            examples = _prediction_examples(
+                model,
+                validation_loader,
+                inputs.charset,
+                device=device,
+            )
+            LOGGER.info("OCR prediction samples: %s", _format_prediction_examples(examples))
         if (
             epoch >= config.train.min_epochs
             and config.train.patience
@@ -704,6 +736,86 @@ def train_ocr(
             LOGGER.info("early stopping after %d stale epochs", stale_epochs)
             break
     return inputs
+
+
+def tiny_overfit_ocr(
+    config_path: Path,
+    *,
+    sample_count: int = 8,
+    steps: int = 300,
+) -> None:
+    """Sanity check: model phải học thuộc được vài OCR line thật trước khi train full."""
+    inputs = validate_ocr_training_experiment(config_path)
+    config = inputs.config
+    if sample_count <= 0:
+        raise ValueError("sample_count phải dương")
+    if steps <= 0:
+        raise ValueError("steps phải dương")
+    samples = inputs.train_samples[:sample_count]
+    if len(samples) < sample_count:
+        raise ValueError(f"không đủ OCR samples để tiny-overfit: {len(samples)} < {sample_count}")
+    set_random_seed(config.train.seed, deterministic=config.train.deterministic)
+    device = torch.device(config.train.device)
+    model = build_crnn(config, inputs.charset).to(device)
+    criterion = nn.CTCLoss(blank=inputs.charset.blank_index, zero_infinity=True)
+    optimizer = AdamW(model.parameters(), lr=config.train.learning_rate, weight_decay=0.0)
+    collator = OcrCollator(inputs.charset)
+    batch = collator(
+        [
+            (
+                preprocess_ocr_image(
+                    sample.image_path,
+                    image_height=config.model.image_height,
+                    image_width=config.model.image_width,
+                    augmentation=None,
+                ),
+                sample.label,
+            )
+            for sample in samples
+        ]
+    )
+    batch = _move_batch(batch, device)
+    last_loss = 0.0
+    for step in range(1, steps + 1):
+        model.train()
+        optimizer.zero_grad(set_to_none=True)
+        loss = _ctc_loss(criterion, model(batch.images), batch)
+        loss.backward()  # type: ignore[no-untyped-call]
+        torch.nn.utils.clip_grad_norm_(model.parameters(), config.train.gradient_clip_norm)
+        optimizer.step()
+        last_loss = float(loss.detach().cpu())
+        if step == 1 or step % 100 == 0 or step == steps:
+            model.eval()
+            with torch.no_grad():
+                predictions = _decode_batch(model(batch.images), inputs.charset)
+            exact = sum(
+                prediction == label
+                for prediction, label in zip(predictions, batch.labels, strict=True)
+            )
+            LOGGER.info(
+                "tiny-overfit step=%d loss=%.4f exact=%d/%d samples=%s",
+                step,
+                last_loss,
+                exact,
+                len(batch.labels),
+                _format_prediction_examples(tuple(zip(batch.labels, predictions, strict=True))[:5]),
+            )
+    model.eval()
+    with torch.no_grad():
+        final_predictions = _decode_batch(model(batch.images), inputs.charset)
+    exact = sum(
+        prediction == label
+        for prediction, label in zip(final_predictions, batch.labels, strict=True)
+    )
+    if exact != len(batch.labels):
+        examples = _format_prediction_examples(
+            tuple(zip(batch.labels, final_predictions, strict=True))[:8]
+        )
+        raise RuntimeError(
+            "tiny-overfit failed "
+            f"exact={exact}/{len(batch.labels)} loss={last_loss:.4f}: {examples}"
+        )
+    LOGGER.info("OCR tiny-overfit passed exact=%d/%d", exact, len(batch.labels))
 
 
 def smoke_test_ocr(config_path: Path) -> None:
@@ -736,7 +848,7 @@ def smoke_test_ocr(config_path: Path) -> None:
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    """Tạo CLI với ba mode loại trừ nhau."""
+    """Tạo CLI với các mode loại trừ nhau."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--config",
@@ -746,6 +858,7 @@ def _build_parser() -> argparse.ArgumentParser:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--check-only", action="store_true")
     mode.add_argument("--smoke-test", action="store_true")
+    mode.add_argument("--tiny-overfit", action="store_true")
     mode.add_argument("--resume", type=Path, metavar="LAST_PT")
     return parser
 
@@ -765,6 +878,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         elif args.smoke_test:
             smoke_test_ocr(args.config)
+        elif args.tiny_overfit:
+            tiny_overfit_ocr(args.config)
         else:
             train_ocr(args.config, resume_path=args.resume)
     except (OSError, RuntimeError, ValueError) as exc:

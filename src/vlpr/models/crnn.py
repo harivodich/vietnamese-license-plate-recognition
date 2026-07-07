@@ -67,6 +67,8 @@ class CrnnCtc(nn.Module):
         hidden_size: int,
         lstm_layers: int,
         dropout: float,
+        blank_index: int,
+        blank_bias: float,
     ) -> None:
         """Tạo model cho ảnh grayscale cao cố định 32 pixel."""
         super().__init__()
@@ -101,6 +103,10 @@ class CrnnCtc(nn.Module):
             bidirectional=True,
         )
         self.classifier = nn.Linear(hidden_size * 2, num_classes)
+        if not 0 <= blank_index < num_classes:
+            raise ValueError("blank_index phải nằm trong số class OCR")
+        with torch.no_grad():
+            self.classifier.bias[blank_index] = blank_bias
 
     def forward(self, images: Tensor) -> Tensor:
         """Trả log-probability tensor `[time, batch, classes]` cho CTCLoss."""

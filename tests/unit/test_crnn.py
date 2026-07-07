@@ -38,12 +38,41 @@ def test_crnn_returns_time_batch_class_log_probabilities() -> None:
         hidden_size=32,
         lstm_layers=1,
         dropout=0.0,
+        blank_index=0,
+        blank_bias=-2.0,
     )
 
     output = model(torch.zeros(2, 1, 32, 160))
 
     assert output.shape == (40, 2, 36)
     assert torch.allclose(output.exp().sum(dim=2), torch.ones(40, 2), atol=1e-5)
+
+
+def test_crnn_applies_blank_bias() -> None:
+    """Blank bias thấp giúp CTC tránh collapse về blank ở đầu training."""
+    model = CrnnCtc(
+        num_classes=4,
+        hidden_size=8,
+        lstm_layers=1,
+        dropout=0.0,
+        blank_index=0,
+        blank_bias=-2.0,
+    )
+
+    assert float(model.classifier.bias[0]) == pytest.approx(-2.0)
+
+
+def test_crnn_rejects_invalid_blank_index() -> None:
+    """Fail sớm nếu cấu hình CTC blank nằm ngoài output classes."""
+    with pytest.raises(ValueError, match="blank_index"):
+        CrnnCtc(
+            num_classes=4,
+            hidden_size=8,
+            lstm_layers=1,
+            dropout=0.0,
+            blank_index=4,
+            blank_bias=-2.0,
+        )
 
 
 def test_preprocess_preserves_aspect_ratio_and_output_shape(tmp_path: Path) -> None:
