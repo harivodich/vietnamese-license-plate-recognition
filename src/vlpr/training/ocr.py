@@ -16,7 +16,7 @@ import torch
 from PIL import Image, ImageEnhance, ImageFilter
 from torch import Tensor, nn
 from torch.optim import AdamW
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader, Dataset
 
 from vlpr.config import project_root, resolve_project_path
@@ -270,21 +270,8 @@ def build_crnn(
     )
 
 
-def _augmentation_for_epoch(
-    config: OcrTrainingExperimentConfig,
-    epoch: int,
-) -> OcrAugmentationSettings | None:
-    """Tắt augmentation ở giai đoạn học chữ sạch, bật nhẹ sau warmup để giảm overfit."""
-    if epoch <= config.train.augmentation_warmup_epochs:
-        return None
-    return config.augmentation
-
-
 def _build_loaders(
     inputs: OcrTrainingInputs,
-    *,
-    train_augmentation: OcrAugmentationSettings | None = None,
-    seed_offset: int = 0,
 ) -> tuple[DataLoader[OcrBatch], DataLoader[OcrBatch]]:
     """Tạo train/validation loaders với shuffle chỉ ở train."""
     config = inputs.config
@@ -292,7 +279,7 @@ def _build_loaders(
         inputs.train_samples,
         image_height=config.model.image_height,
         image_width=config.model.image_width,
-        augmentation=train_augmentation,
+        augmentation=config.augmentation,
     )
     validation_dataset = OcrLineDataset(
         inputs.validation_samples,
@@ -301,12 +288,12 @@ def _build_loaders(
         augmentation=None,
     )
     collator = OcrCollator(inputs.charset)
-    generator = torch.Generator().manual_seed(config.train.seed + seed_offset)
+    generator = torch.Generator().manual_seed(config.train.seed)
     common: dict[str, Any] = {
         "batch_size": config.train.batch_size,
         "num_workers": config.train.workers,
         "pin_memory": config.train.device.startswith("cuda"),
-        "persistent_workers": False,
+        "persistent_workers": config.train.workers > 0,
         "collate_fn": collator,
     }
     train_loader = DataLoader(
@@ -471,7 +458,7 @@ def _save_checkpoint(
     epoch: int,
     model: CrnnCtc,
     optimizer: AdamW,
-    scheduler: ReduceLROnPlateau,
+    scheduler: CosineAnnealingLR,
     best_score: OcrSelectionScore,
     stale_epochs: int,
     inputs: OcrTrainingInputs,
@@ -582,7 +569,7 @@ def _load_resume(
     *,
     model: CrnnCtc,
     optimizer: AdamW,
-    scheduler: ReduceLROnPlateau,
+    scheduler: CosineAnnealingLR,
     inputs: OcrTrainingInputs,
     device: torch.device,
 ) -> tuple[int, OcrSelectionScore, int]:
@@ -598,7 +585,7 @@ def _load_resume(
         raise ValueError("resume checkpoint dùng model config khác")
     model.load_state_dict(checkpoint["model_state"])
     optimizer.load_state_dict(checkpoint["optimizer_state"])
-    scheduler.load_state_dict(checkpoint["scheduler_state"])  # type: ignore[no-untyped-call]
+    scheduler.load_state_dict(checkpoint["scheduler_state"])
     best_score = OcrSelectionScore(
         exact_match=float(checkpoint["best_exact_match"]),
         cer=float(checkpoint.get("best_cer", float("inf"))),
@@ -628,12 +615,10 @@ def train_ocr(
         lr=config.train.learning_rate,
         weight_decay=config.train.weight_decay,
     )
-    scheduler = ReduceLROnPlateau(
+    scheduler = CosineAnnealingLR(
         optimizer,
-        mode="min",
-        factor=config.train.lr_plateau_factor,
-        patience=config.train.lr_plateau_patience,
-        min_lr=config.train.min_learning_rate,
+        T_max=config.train.epochs,
+        eta_min=config.train.learning_rate * 0.1,
     )
     start_epoch = 1
     best_score = OcrSelectionScore(exact_match=-1.0, cer=float("inf"), loss=float("inf"))
@@ -652,17 +637,12 @@ def train_ocr(
             device=device,
         )
 
-    _, validation_loader = _build_loaders(inputs)
+    train_loader, validation_loader = _build_loaders(inputs)
     inputs.output_dir.mkdir(parents=True, exist_ok=True)
     if resume_path is None:
         _clear_previous_ocr_run(inputs.output_dir)
     history_path = inputs.output_dir / "history.csv"
     for epoch in range(start_epoch, config.train.epochs + 1):
-        train_loader, _ = _build_loaders(
-            inputs,
-            train_augmentation=_augmentation_for_epoch(config, epoch),
-            seed_offset=epoch,
-        )
         started = time.perf_counter()
         train_loss = _train_epoch(
             model,
@@ -689,7 +669,7 @@ def train_ocr(
             learning_rate=learning_rate,
             epoch_seconds=epoch_seconds,
         )
-        scheduler.step(validation.cer)
+        scheduler.step()
         candidate_score = OcrSelectionScore(
             exact_match=validation.exact_match,
             cer=validation.cer,

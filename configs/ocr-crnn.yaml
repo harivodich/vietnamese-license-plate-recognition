@@ -16,10 +16,10 @@ model:
   blank_bias: -2.0
 
 augmentation:
-  rotation_degrees: 1.0
-  brightness: 0.08
-  contrast: 0.08
-  blur_probability: 0.03
+  rotation_degrees: 0.0
+  brightness: 0.0
+  contrast: 0.0
+  blur_probability: 0.0
 
 train:
   epochs: 80
@@ -30,10 +30,6 @@ train:
   seed: 42
   deterministic: true
   learning_rate: 0.001
-  min_learning_rate: 0.0001
-  lr_plateau_factor: 0.5
-  lr_plateau_patience: 5
-  augmentation_warmup_epochs: 12
   weight_decay: 0.0001
   gradient_clip_norm: 5.0
   patience: 15
