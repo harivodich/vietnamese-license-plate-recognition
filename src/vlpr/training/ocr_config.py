@@ -65,6 +65,10 @@ class OcrOptimizationSettings(BaseModel):
     seed: int = Field(ge=0)
     deterministic: bool
     learning_rate: float = Field(gt=0.0)
+    min_learning_rate: float = Field(gt=0.0)
+    lr_plateau_factor: float = Field(gt=0.0, lt=1.0)
+    lr_plateau_patience: int = Field(ge=0)
+    augmentation_warmup_epochs: int = Field(ge=0)
     weight_decay: float = Field(ge=0.0)
     gradient_clip_norm: float = Field(gt=0.0)
     patience: int = Field(ge=0)
@@ -75,6 +79,8 @@ class OcrOptimizationSettings(BaseModel):
         """Không cho early stopping chạy trước tổng số epoch hợp lệ."""
         if self.min_epochs > self.epochs:
             raise ValueError("min_epochs không được lớn hơn epochs")
+        if self.min_learning_rate > self.learning_rate:
+            raise ValueError("min_learning_rate không được lớn hơn learning_rate")
         return self
 
 

@@ -172,7 +172,11 @@ nghĩa là model có thể đang học thuộc train hoặc preprocessing/tách 
 
 `blank_bias: -2.0`: giảm bias ban đầu của CTC blank class. CTC dễ collapse về blank hoặc chuỗi ngắn phổ biến; bias âm buộc model thử ký tự thật sớm hơn.
 
-`learning_rate: 0.001`: tốc độ cập nhật trọng số. Nếu loss dao động mạnh, giảm xuống `0.0005`.
+`learning_rate: 0.001`: tốc độ cập nhật ban đầu. Trainer dùng ReduceLROnPlateau theo validation CER, nên LR chỉ giảm khi validation không cải thiện, thay vì giảm đều theo epoch.
+
+`min_learning_rate: 0.0001`: sàn learning rate để model không học quá chậm ở cuối training.
+
+`augmentation_warmup_epochs: 12`: 12 epoch đầu học ảnh sạch; sau đó bật augmentation nhẹ để giảm overfit.
 
 `min_epochs: 30`: không cho early stopping dừng trước 30 epoch, vì OCR từ scratch thường chưa có exact match ở giai đoạn đầu.
 
@@ -202,6 +206,10 @@ Không nên đổi:
 
 - test split sau khi đã bắt đầu so sánh model;
 - validation rule giữa các thí nghiệm nếu muốn ablation công bằng.
+
+## Checkpoint selection
+
+Ở giai đoạn OCR còn yếu, `exact_match` rất thưa: đúng một ảnh hay sai một ảnh có thể làm metric nhảy mạnh. Vì vậy trainer chọn `best.pt` theo validation CER thấp nhất trước, sau đó mới dùng exact match và validation loss để phá hòa.
 
 ## Checklist trước khi train qua đêm
 

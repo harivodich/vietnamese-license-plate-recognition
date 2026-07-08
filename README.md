@@ -136,6 +136,8 @@ If training is interrupted, resume from the latest checkpoint:
 python scripts/train_ocr.py --config configs/ocr-crnn.yaml --resume artifacts/ocr/crnn-ctc-wide-baseline/last.pt
 ```
 
+The trainer selects `best.pt` by validation CER first, reduces learning rate on validation plateau, and enables mild augmentation after warmup.
+
 Detailed explanation of CRNN, CTC loss, metrics, checkpoints, resume flow, and tunable settings:
 [OCR training guide](docs/ocr-training-guide.md).
 

@@ -16,7 +16,7 @@ import torch
 from PIL import Image, ImageEnhance, ImageFilter
 from torch import Tensor, nn
 from torch.optim import AdamW
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader, Dataset
 
 from vlpr.config import project_root, resolve_project_path
@@ -270,8 +270,21 @@ def build_crnn(
     )
 
 
+def _augmentation_for_epoch(
+    config: OcrTrainingExperimentConfig,
+    epoch: int,
+) -> OcrAugmentationSettings | None:
+    """Tắt augmentation ở giai đoạn học chữ sạch, bật nhẹ sau warmup để giảm overfit."""
+    if epoch <= config.train.augmentation_warmup_epochs:
+        return None
+    return config.augmentation
+
+
 def _build_loaders(
     inputs: OcrTrainingInputs,
+    *,
+    train_augmentation: OcrAugmentationSettings | None = None,
+    seed_offset: int = 0,
 ) -> tuple[DataLoader[OcrBatch], DataLoader[OcrBatch]]:
     """Tạo train/validation loaders với shuffle chỉ ở train."""
     config = inputs.config
@@ -279,7 +292,7 @@ def _build_loaders(
         inputs.train_samples,
         image_height=config.model.image_height,
         image_width=config.model.image_width,
-        augmentation=config.augmentation,
+        augmentation=train_augmentation,
     )
     validation_dataset = OcrLineDataset(
         inputs.validation_samples,
@@ -288,12 +301,12 @@ def _build_loaders(
         augmentation=None,
     )
     collator = OcrCollator(inputs.charset)
-    generator = torch.Generator().manual_seed(config.train.seed)
+    generator = torch.Generator().manual_seed(config.train.seed + seed_offset)
     common: dict[str, Any] = {
         "batch_size": config.train.batch_size,
         "num_workers": config.train.workers,
         "pin_memory": config.train.device.startswith("cuda"),
-        "persistent_workers": config.train.workers > 0,
+        "persistent_workers": False,
         "collate_fn": collator,
     }
     train_loader = DataLoader(
@@ -440,14 +453,14 @@ def _is_better_ocr_checkpoint(
     *,
     epsilon: float = 1e-12,
 ) -> bool:
-    """So sánh checkpoint ổn định khi exact match còn bằng 0 ở các epoch đầu."""
-    if candidate.exact_match > best.exact_match + epsilon:
-        return True
-    if candidate.exact_match < best.exact_match - epsilon:
-        return False
+    """Chọn checkpoint theo CER trước khi exact còn quá thưa để ổn định."""
     if candidate.cer < best.cer - epsilon:
         return True
     if candidate.cer > best.cer + epsilon:
+        return False
+    if candidate.exact_match > best.exact_match + epsilon:
+        return True
+    if candidate.exact_match < best.exact_match - epsilon:
         return False
     return candidate.loss < best.loss - epsilon
 
@@ -458,7 +471,7 @@ def _save_checkpoint(
     epoch: int,
     model: CrnnCtc,
     optimizer: AdamW,
-    scheduler: CosineAnnealingLR,
+    scheduler: ReduceLROnPlateau,
     best_score: OcrSelectionScore,
     stale_epochs: int,
     inputs: OcrTrainingInputs,
@@ -569,7 +582,7 @@ def _load_resume(
     *,
     model: CrnnCtc,
     optimizer: AdamW,
-    scheduler: CosineAnnealingLR,
+    scheduler: ReduceLROnPlateau,
     inputs: OcrTrainingInputs,
     device: torch.device,
 ) -> tuple[int, OcrSelectionScore, int]:
@@ -585,7 +598,7 @@ def _load_resume(
         raise ValueError("resume checkpoint dùng model config khác")
     model.load_state_dict(checkpoint["model_state"])
     optimizer.load_state_dict(checkpoint["optimizer_state"])
-    scheduler.load_state_dict(checkpoint["scheduler_state"])
+    scheduler.load_state_dict(checkpoint["scheduler_state"])  # type: ignore[no-untyped-call]
     best_score = OcrSelectionScore(
         exact_match=float(checkpoint["best_exact_match"]),
         cer=float(checkpoint.get("best_cer", float("inf"))),
@@ -615,10 +628,12 @@ def train_ocr(
         lr=config.train.learning_rate,
         weight_decay=config.train.weight_decay,
     )
-    scheduler = CosineAnnealingLR(
+    scheduler = ReduceLROnPlateau(
         optimizer,
-        T_max=config.train.epochs,
-        eta_min=config.train.learning_rate * 0.01,
+        mode="min",
+        factor=config.train.lr_plateau_factor,
+        patience=config.train.lr_plateau_patience,
+        min_lr=config.train.min_learning_rate,
     )
     start_epoch = 1
     best_score = OcrSelectionScore(exact_match=-1.0, cer=float("inf"), loss=float("inf"))
@@ -637,12 +652,17 @@ def train_ocr(
             device=device,
         )
 
-    train_loader, validation_loader = _build_loaders(inputs)
+    _, validation_loader = _build_loaders(inputs)
     inputs.output_dir.mkdir(parents=True, exist_ok=True)
     if resume_path is None:
         _clear_previous_ocr_run(inputs.output_dir)
     history_path = inputs.output_dir / "history.csv"
     for epoch in range(start_epoch, config.train.epochs + 1):
+        train_loader, _ = _build_loaders(
+            inputs,
+            train_augmentation=_augmentation_for_epoch(config, epoch),
+            seed_offset=epoch,
+        )
         started = time.perf_counter()
         train_loss = _train_epoch(
             model,
@@ -669,7 +689,7 @@ def train_ocr(
             learning_rate=learning_rate,
             epoch_seconds=epoch_seconds,
         )
-        scheduler.step()
+        scheduler.step(validation.cer)
         candidate_score = OcrSelectionScore(
             exact_match=validation.exact_match,
             cer=validation.cer,
@@ -712,12 +732,15 @@ def train_ocr(
             )
         _plot_history(history_path, inputs.output_dir / "training_curves.png")
         LOGGER.info(
-            "epoch=%d train_loss=%.4f val_loss=%.4f exact=%.4f CER=%.4f seconds=%.1f",
+            "epoch=%d train_loss=%.4f val_loss=%.4f exact=%.4f "
+            "CER=%.4f char_acc=%.4f lr=%.6f seconds=%.1f",
             epoch,
             train_loss,
             validation.loss,
             validation.exact_match,
             validation.cer,
+            validation.character_accuracy,
+            learning_rate,
             epoch_seconds,
         )
         if epoch == start_epoch or epoch % 5 == 0:
