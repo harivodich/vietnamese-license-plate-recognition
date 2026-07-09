@@ -8,8 +8,8 @@ data:
   include_compact: false
 
 model:
-  image_height: 32
-  image_width: 160
+  image_height: 48
+  image_width: 256
   hidden_size: 256
   lstm_layers: 2
   dropout: 0.0
@@ -24,7 +24,7 @@ augmentation:
 train:
   epochs: 80
   min_epochs: 30
-  batch_size: 64
+  batch_size: 48
   workers: 4
   device: cuda:0
   seed: 42
@@ -32,7 +32,9 @@ train:
   learning_rate: 0.001
   weight_decay: 0.0001
   gradient_clip_norm: 5.0
-  patience: 15
+  decoder_beam_width: 1
+  early_stop_min_delta: 0.002
+  patience: 12
   save_period: 5
 
 output:

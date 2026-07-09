@@ -17,3 +17,14 @@ data/processed/*
 !data/processed/.gitkeep
 mlruns/
 wandb/
+external/
+output/
+*.pdparams
+*.pdopt
+*.pdmodel
+*.pdiparams
+*.pdiparams.info
+colab_training_pack/
+colab_training_pack.zip
+colab_eval_pack/
+colab_eval_pack.zip

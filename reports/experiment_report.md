@@ -163,3 +163,52 @@ Preflight and smoke-test completed successfully on the prepared dataset. Full tr
 Tracked guidance:
 
 - [OCR training guide](../docs/ocr-training-guide.md).
+
+## OCR PaddleOCR fine-tuning
+
+The project then switches the trainable OCR path from the local CRNN experiment to the pretrained
+PaddleOCR recognition model. This is the stronger production-oriented direction because it starts
+from an OCR model that already understands text-line features instead of learning OCR from scratch.
+
+The fine-tuning data is exported in PaddleOCR recognition format:
+
+| Split | Line samples |
+| --- | ---: |
+| Train | 7,595 |
+| Validation | 1,249 |
+| Test | 1,262 |
+
+The evaluated checkpoint is `best_accuracy` from the PaddleOCR fine-tuning run. It was first evaluated on
+the fixed held-out line-level test split using PaddleOCR's official recognition metric:
+
+| Metric | Value |
+| --- | ---: |
+| PaddleOCR recognition accuracy | 0.7639 |
+| Normalized edit distance | 0.8997 |
+| GPU evaluation throughput | 167.65 FPS |
+
+### Full-plate Evaluation
+
+The fine-tuned recognizer was exported and integrated into the project evaluation path, measuring full-plate exact match, CER, and geometric subgroup metrics under the exact same strict protocol as the pretrained OCR baseline.
+
+| Metric | Pretrained Baseline | Fine-tuned Model | Improvement |
+| --- | ---: | ---: | ---: |
+| Full-plate exact match | 19.44% | 70.42% | **+ 50.98%** |
+| Character error rate (CER) | 59.38% | 9.25% | **- 50.13%** |
+| Character accuracy | 40.62% | 90.75% | **+ 50.13%** |
+
+**Metrics by Geometry:**
+- **Compact plates (2 lines):** Exact match 66.89%, CER 10.49%
+- **Wide plates (1 line):** Exact match 74.60%, CER 7.69%
+
+The fine-tuning process was a massive success, boosting the strict full-plate exact match rate from an unusable 19% to over 70%, and pushing character accuracy past 90%.
+
+### Error Analysis and Next Steps
+
+Despite the massive improvement, the 70.4% exact match indicates room for optimization. The top 25 failure cases were extracted for manual visual review using the `scripts/analyze_ocr_errors.py` script.
+
+Initial findings from the worst failure cases (e.g. `Ground truth: 68HC 00047` vs `Prediction: 29A 1923`) strongly indicate the presence of **Noisy Labels / Annotation Errors** in the ground-truth test set. When the model outputs a completely different but valid license plate format with a high edit distance, it is usually because the dataset annotation is mismatched with the image crop.
+
+**Recommended Next Steps before further training:**
+1. **Clean the Test Set:** Visually review the images in `artifacts/ocr/paddleocr-v5-mobile-finetune/eval/failures` and correct the ground-truth labels. Evaluating on noisy labels artificially caps the maximum possible exact match score.
+2. **Address Compact Plates:** Wide plates perform significantly better than compact plates (74.6% vs 66.9% exact match). Data augmentation targeting compact plates (blur, perspective transform) or reviewing the crop splitting logic should be considered.

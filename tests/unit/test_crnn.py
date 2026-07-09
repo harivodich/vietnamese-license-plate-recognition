@@ -10,6 +10,8 @@ from PIL import Image
 from vlpr.models.crnn import CrnnCtc, OcrCharset
 from vlpr.training.ocr import (
     OcrSelectionScore,
+    _decode_batch,
+    _feature_timesteps_from_width,
     _is_better_ocr_checkpoint,
     preprocess_ocr_image,
 )
@@ -40,12 +42,29 @@ def test_crnn_returns_time_batch_class_log_probabilities() -> None:
         dropout=0.0,
         blank_index=0,
         blank_bias=-2.0,
+        input_height=48,
+    )
+
+    output = model(torch.zeros(2, 1, 48, 256))
+
+    assert output.shape == (64, 2, 36)
+    assert torch.allclose(output.exp().sum(dim=2), torch.ones(64, 2), atol=1e-5)
+
+
+def test_crnn_still_accepts_original_baseline_size() -> None:
+    """Adaptive vertical pooling gi? model d?ng ???c v?i checkpoint/config th? nghi?m nh?."""
+    model = CrnnCtc(
+        num_classes=36,
+        hidden_size=32,
+        lstm_layers=1,
+        dropout=0.0,
+        blank_index=0,
+        blank_bias=-2.0,
     )
 
     output = model(torch.zeros(2, 1, 32, 160))
 
     assert output.shape == (40, 2, 36)
-    assert torch.allclose(output.exp().sum(dim=2), torch.ones(40, 2), atol=1e-5)
 
 
 def test_crnn_applies_blank_bias() -> None:
@@ -82,15 +101,39 @@ def test_preprocess_preserves_aspect_ratio_and_output_shape(tmp_path: Path) -> N
 
     tensor = preprocess_ocr_image(
         image_path,
-        image_height=32,
-        image_width=160,
+        image_height=48,
+        image_width=256,
         augmentation=None,
     )
 
-    assert tensor.shape == (1, 32, 160)
+    assert tensor.shape == (1, 48, 256)
     assert tensor.dtype == torch.float32
     assert tensor.min() >= -1.0
     assert tensor.max() <= 1.0
+
+
+def test_feature_timesteps_follow_two_floor_pooling_stages() -> None:
+    """Input length ph?i kh?p hai MaxPool2d ngang, kh?ng ?n sang padding."""
+    assert _feature_timesteps_from_width(256) == 64
+    assert _feature_timesteps_from_width(85) == 21
+    assert _feature_timesteps_from_width(3) == 1
+
+
+def test_decode_batch_ignores_right_padding_timesteps() -> None:
+    """CTC metric kh?ng ???c ??c k? t? sinh ra t? v?ng padding tr?ng b?n ph?i."""
+    charset = OcrCharset(("A", "B", "C"))
+    logits = torch.full((4, 1, 4), -10.0)
+    logits[0, 0, 1] = 10.0
+    logits[1, 0, 2] = 10.0
+    logits[2, 0, 0] = 10.0
+    logits[3, 0, 3] = 10.0
+    log_probabilities = torch.log_softmax(logits, dim=2)
+
+    assert _decode_batch(
+        log_probabilities,
+        charset,
+        input_lengths=torch.tensor([3]),
+    ) == ("AB",)
 
 
 def test_ocr_checkpoint_selection_uses_cer_when_exact_match_ties() -> None:

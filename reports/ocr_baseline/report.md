@@ -2,81 +2,71 @@
 
 ## Protocol
 
-The baseline evaluates `en_PP-OCRv5_mobile_rec` directly on the 818 fixed test crops from the OCR
-dataset. The detector is not involved, so these results isolate recognition quality from detection
-and crop errors.
+The OCR baseline evaluates `en_PP-OCRv5_mobile_rec` on the fixed OCR `test` split using
+ground-truth plate crops. The detector is not involved, so these results isolate recognition
+quality from detection and crop errors.
+
+Shared runtime settings:
 
 - inference device: CPU;
 - batch size: 32;
 - CPU threads: 8;
 - MKL-DNN: enabled;
 - text detection: disabled;
-- input: ground-truth plate crops;
+- input source: ground-truth plate crops;
 - normalization: Unicode NFKC, uppercase, then remove non-alphanumeric separators.
 
-Raw predictions are retained alongside normalized strings. Normalization therefore does not hide
-the model output used to calculate each edit distance.
+## Why layout matters
 
-## Overall result
+`en_PP-OCRv5_mobile_rec` is a line recognizer. A wide one-line plate crop matches that assumption.
+A compact two-line crop does not. Scoring compact crops directly measures a layout mismatch as much
+as recognition quality.
 
-| Metric | Value |
-| --- | ---: |
-| Test crops | 818 |
-| Exact matches | 159 |
-| Full-plate exact match | 0.1944 |
-| Character error rate | 0.5938 |
-| Character accuracy | 0.4062 |
-| Mean model confidence | 0.5832 |
-| Empty predictions | 47 |
-| Inference latency | 62.86 ms/image |
-| Throughput | 15.91 images/second |
+The project therefore keeps two OCR baselines:
 
-This pretrained model is not an acceptable final recognizer. Approximately one in five plates is
-fully correct, and the aggregate edit distance is 3,952 over 6,656 ground-truth characters.
+1. `original`: send each plate crop directly to the recognizer.
+2. `split_compact`: keep wide crops unchanged, split compact crops into top/bottom line crops,
+   recognize each line, then concatenate the normalized line predictions before calculating the
+   full-plate metric.
 
-## Geometry breakdown
+## Result summary
 
-The crop aspect ratio is used only as a reproducible geometry proxy. `Compact` does not claim that
-every image is a two-line plate.
+| Experiment | Test crops | Exact matches | Full-plate exact match | CER | Character accuracy |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Original crops, all geometry | 818 | 159 | 0.1944 | 0.5938 | 0.4062 |
+| Original crops, wide only | 374 | 159 | 0.4251 | 0.3477 | 0.6523 |
+| Split compact layout, all geometry | 818 | 308 | 0.3765 | 0.3241 | 0.6759 |
 
-| Geometry | Crops | Exact matches | Exact match | CER |
-| --- | ---: | ---: | ---: | ---: |
-| Compact, width/height below 1.5 | 444 | 0 | 0.0000 | 0.7883 |
-| Wide, width/height at least 1.5 | 374 | 159 | 0.4251 | 0.3477 |
+The layout-aware baseline roughly doubles full-plate exact matches compared with direct OCR on all
+crops: 159 -> 308. CER improves from 0.5938 to 0.3241.
 
-The zero exact-match rate on compact crops is the strongest measured failure mode. The same
-recognizer is materially better on wide crops, so layout mismatch should be tested before spending
-compute on fine-tuning.
+## Geometry breakdown for split-compact layout
 
-## Error analysis
+| Geometry | Crops | Exact matches | Exact match | CER | Character accuracy |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Compact, split into two lines | 444 | 149 | 0.3356 | 0.3054 | 0.6946 |
+| Wide, unchanged | 374 | 159 | 0.4251 | 0.3477 | 0.6523 |
 
-- All 159 exact matches come from the wide group.
-- Forty-seven crops produce an empty string.
-- Eighteen labels contain `Đ`; none is an exact match because the English pretrained charset does
-  not represent this project-specific character.
-- Mean confidence is 0.9519 for exact predictions and 0.4942 for incorrect predictions.
-- Confidence alone is not a correctness guarantee: 25 incorrect predictions have confidence at
-  least 0.9, and the highest incorrect confidence is 0.9943.
+The compact group changes from zero exact matches under direct recognition to 149 exact matches
+after deterministic row splitting. This confirms that the main compact failure was input layout,
+not just lack of OCR capacity.
 
-The 25 predictions with the largest edit distance are embedded in
-[metrics.json](metrics.json). Every sample-level raw prediction, normalized prediction,
-confidence, edit distance, and exact-match flag is retained in
-[predictions.jsonl](predictions.jsonl).
+## Remaining failure modes
 
-## Decision
+- The pretrained English recognizer still does not model the full Vietnamese license-plate charset
+  perfectly, especially project-specific characters such as `Đ`.
+- Some compact crops are very small, so row splitting creates tiny line images with limited detail.
+- Confidence is useful for ranking failures but is not a correctness guarantee.
+- The split threshold is deterministic and simple; it has not been tuned with a dedicated validation
+  search.
 
-Do not fine-tune immediately. The next controlled experiment should preserve direct recognition
-for wide crops and transform compact crops into ordered text-line inputs before recognition.
-Candidate row splitting must be designed and selected on the validation split only.
+## Artifacts
 
-If validation results remain weak after layout handling, fine-tuning becomes justified. A
-fine-tuned recognizer must include the exact project charset, including `Đ`, and must report:
+- Original full-split metrics: [metrics.json](metrics.json)
+- Original full-split predictions: [predictions.jsonl](predictions.jsonl)
+- Split-compact metrics: [layout_metrics.json](layout_metrics.json)
 
-- character error rate;
-- character accuracy;
-- full-plate exact match;
-- compact and wide subgroup metrics;
-- latency with the same CPU protocol.
-
-The current test result is frozen as the pretrained OCR baseline. The test split should not be
-reused repeatedly while choosing preprocessing thresholds or model variants.
+The current decision is to use pretrained OCR plus layout handling as the main OCR path. The
+CRNN+CTC trainer remains a scratch baseline for teaching, sanity checks, checkpointing, and metric
+validation. The next production-oriented step is pretrained OCR fine-tuning with the project
+charset and the same compact/wide subgroup reporting.

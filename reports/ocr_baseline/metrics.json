@@ -326,6 +326,7 @@
       "width": 28
     }
   ],
+  "geometry": "all",
   "inference_ms_per_image": 62.85908435208016,
   "mean_confidence": 0.5831531927372103,
   "metrics": {

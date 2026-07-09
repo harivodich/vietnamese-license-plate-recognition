@@ -3,7 +3,7 @@
 import numpy as np
 from PIL import Image
 
-from vlpr.data.ocr_training import find_compact_row_split, split_compact_crop
+from vlpr.data.ocr_layout import find_compact_row_split, split_compact_crop
 
 
 def _two_line_image() -> Image.Image:

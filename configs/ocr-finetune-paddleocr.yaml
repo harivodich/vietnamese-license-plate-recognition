@@ -1,0 +1,8 @@
+data:
+  manifest: data/processed/ocr_manifest.jsonl
+  dataset_root: data/raw/kaggle/ocr/v1/lp_ocr_dataset_vi
+  output_dir: data/processed/ocr_finetune_paddleocr
+  compact_aspect_ratio: 1.5
+  split_search_start: 0.35
+  split_search_end: 0.65
+  extra_characters: "ABCDEFGHIJKLMNOPQRSTUVWXYZĐ0123456789"

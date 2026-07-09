@@ -69,9 +69,13 @@ class CrnnCtc(nn.Module):
         dropout: float,
         blank_index: int,
         blank_bias: float,
+        input_height: int = 32,
     ) -> None:
-        """Tạo model cho ảnh grayscale cao cố định 32 pixel."""
+        """Create CRNN for the fixed OCR image height from config."""
         super().__init__()
+        vertical_feature_height = input_height // 16
+        if vertical_feature_height < 1:
+            raise ValueError("input_height is too small for CRNN pooling")
         self.features = nn.Sequential(
             nn.Conv2d(1, 64, 3, padding=1),
             nn.ReLU(inplace=True),
@@ -91,7 +95,12 @@ class CrnnCtc(nn.Module):
             nn.Conv2d(512, 512, 3, padding=1),
             nn.ReLU(inplace=True),
             nn.MaxPool2d((2, 1)),
-            nn.Conv2d(512, 512, (2, 1)),
+            nn.Conv2d(512, 512, 3, padding=1),
+            nn.BatchNorm2d(512),
+            nn.ReLU(inplace=True),
+            # Height-specific collapse is faster than adaptive pooling on GPU
+            # and keeps the horizontal sequence unchanged.
+            nn.Conv2d(512, 512, (vertical_feature_height, 1)),
             nn.ReLU(inplace=True),
         )
         recurrent_dropout = dropout if lstm_layers > 1 else 0.0

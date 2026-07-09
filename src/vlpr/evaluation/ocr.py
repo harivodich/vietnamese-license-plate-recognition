@@ -6,19 +6,31 @@ import logging
 import time
 import unicodedata
 from collections import defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 from statistics import fmean
 from typing import Any, Literal
 
 import yaml
+from PIL import Image
 from pydantic import BaseModel, ConfigDict, Field
 
 from vlpr.config import project_root, resolve_project_path
 from vlpr.data.manifest_io import read_manifest
 from vlpr.data.manifest_schema import OcrManifestRecord
+from vlpr.data.ocr_layout import split_compact_crop
 from vlpr.utils.logging import configure_logging
 
 LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class _RecognitionInput:
+    """One image sent to the recognizer, linked back to its source plate record."""
+
+    path: Path
+    record: OcrManifestRecord
+    part: Literal["full", "top", "bottom"]
 
 
 class OcrEvaluationConfig(BaseModel):
@@ -26,12 +38,17 @@ class OcrEvaluationConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    model_name: str = Field(min_length=1)
+    model_name: str = Field(default="")
+    model_dir: str | None = None
     manifest: Path
     dataset_root: Path
     project: Path
     name: str = Field(min_length=1)
     split: Literal["test"]
+    geometry: Literal["all", "wide", "compact"] = "all"
+    layout: Literal["original", "split_compact"] = "original"
+    split_search_start: float = Field(default=0.35, gt=0.0, lt=1.0)
+    split_search_end: float = Field(default=0.65, gt=0.0, lt=1.0)
     device: str = Field(min_length=1)
     batch_size: int = Field(gt=0)
     cpu_threads: int = Field(gt=0)
@@ -91,6 +108,8 @@ class OcrEvaluationResult(BaseModel):
 
     model_name: str
     split: Literal["test"]
+    geometry: Literal["all", "wide", "compact"]
+    layout: Literal["original", "split_compact"]
     metrics: OcrMetricGroup
     metrics_by_geometry: dict[str, OcrMetricGroup]
     mean_confidence: float
@@ -146,10 +165,12 @@ def validate_ocr_evaluation(path: Path) -> OcrEvaluationInputs:
     records = tuple(
         record
         for record in read_manifest(manifest)
-        if isinstance(record, OcrManifestRecord) and record.split == config.split
+        if isinstance(record, OcrManifestRecord)
+        and record.split == config.split
+        and _record_matches_geometry(record, config)
     )
     if not records:
-        raise ValueError("OCR test split rỗng")
+        raise ValueError(f"OCR test split rỗng với geometry={config.geometry}")
 
     image_paths: list[Path] = []
     for record in records:
@@ -166,6 +187,130 @@ def validate_ocr_evaluation(path: Path) -> OcrEvaluationInputs:
         records=records,
         image_paths=tuple(image_paths),
     )
+
+
+def _is_compact_record(record: OcrManifestRecord, compact_aspect_ratio: float) -> bool:
+    """Classify plate crop geometry with the same reproducible aspect-ratio rule."""
+    return record.width / record.height < compact_aspect_ratio
+
+
+def _record_matches_geometry(
+    record: OcrManifestRecord,
+    config: OcrEvaluationConfig,
+) -> bool:
+    """Filter OCR crops by shape so one-line recognizers are not scored on two-line plates."""
+    if config.geometry == "all":
+        return True
+    is_compact = _is_compact_record(record, config.compact_aspect_ratio)
+    return is_compact if config.geometry == "compact" else not is_compact
+
+
+def _write_line_crop(image: Image.Image, path: Path) -> None:
+    """Write split line crops losslessly so recognizer input can be audited."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    image.convert("RGB").save(path, format="PNG", optimize=True)
+
+
+def _build_recognition_inputs(
+    inputs: OcrEvaluationInputs,
+    output_dir: Path,
+) -> tuple[_RecognitionInput, ...]:
+    """Build recognizer inputs, optionally splitting compact plates into top/bottom lines."""
+    config = inputs.config
+    recognition_inputs: list[_RecognitionInput] = []
+    line_crop_dir = output_dir / "line_crops"
+
+    for record, image_path in zip(inputs.records, inputs.image_paths, strict=True):
+        should_split = config.layout == "split_compact" and _is_compact_record(
+            record,
+            config.compact_aspect_ratio,
+        )
+        if not should_split:
+            recognition_inputs.append(
+                _RecognitionInput(path=image_path, record=record, part="full")
+            )
+            continue
+
+        tokens = record.annotation.raw_text.split()
+        if len(tokens) != 2:
+            raise ValueError(f"compact label must contain exactly 2 tokens: {record.sample_id}")
+        with Image.open(image_path) as opened:
+            image = opened.convert("RGB")
+        top, bottom = split_compact_crop(
+            image,
+            search_start=config.split_search_start,
+            search_end=config.split_search_end,
+        )
+        top_path = line_crop_dir / f"{record.sha256}_top.png"
+        bottom_path = line_crop_dir / f"{record.sha256}_bottom.png"
+        _write_line_crop(top, top_path)
+        _write_line_crop(bottom, bottom_path)
+        recognition_inputs.extend(
+            (
+                _RecognitionInput(path=top_path, record=record, part="top"),
+                _RecognitionInput(path=bottom_path, record=record, part="bottom"),
+            )
+        )
+
+    return tuple(recognition_inputs)
+
+
+def _result_by_path(raw_results: list[Any]) -> dict[Path, Any]:
+    """Index recognizer output by resolved path and reject duplicate backend outputs."""
+    result_by_path: dict[Path, Any] = {}
+    for result in raw_results:
+        result_path = Path(result["input_path"]).resolve()
+        if result_path in result_by_path:
+            raise ValueError(f"PaddleOCR returned duplicate image: {result_path}")
+        result_by_path[result_path] = result
+    return result_by_path
+
+
+def _match_results_to_recognition_inputs(
+    inputs: OcrEvaluationInputs,
+    recognition_inputs: tuple[_RecognitionInput, ...],
+    raw_results: list[Any],
+) -> tuple[OcrPrediction, ...]:
+    """Merge line-level recognizer outputs back into full-plate predictions."""
+    remaining_results = _result_by_path(raw_results)
+    results_by_sample: dict[str, list[tuple[_RecognitionInput, Any]]] = defaultdict(list)
+
+    for recognition_input in recognition_inputs:
+        result_path = recognition_input.path.resolve()
+        try:
+            result = remaining_results.pop(result_path)
+        except KeyError as exc:
+            raise ValueError(f"PaddleOCR missing output for image: {result_path}") from exc
+        results_by_sample[recognition_input.record.sample_id].append((recognition_input, result))
+
+    if remaining_results:
+        raise ValueError(f"PaddleOCR returned {len(remaining_results)} outputs outside test split")
+
+    predictions: list[OcrPrediction] = []
+    for record in inputs.records:
+        grouped_results = results_by_sample.get(record.sample_id, [])
+        if not grouped_results:
+            raise ValueError(f"PaddleOCR missing output for record: {record.sample_id}")
+        raw_texts = [str(result["rec_text"]) for _, result in grouped_results]
+        normalized_prediction = "".join(normalize_plate_text(text) for text in raw_texts)
+        normalized_ground_truth = normalize_plate_text(record.annotation.raw_text)
+        distance = levenshtein_distance(normalized_ground_truth, normalized_prediction)
+        predictions.append(
+            OcrPrediction(
+                sample_id=record.sample_id,
+                image_path=record.image_path,
+                width=record.width,
+                height=record.height,
+                ground_truth=record.annotation.raw_text,
+                prediction=" ".join(text for text in raw_texts if text),
+                normalized_ground_truth=normalized_ground_truth,
+                normalized_prediction=normalized_prediction,
+                confidence=fmean(float(result["rec_score"]) for _, result in grouped_results),
+                edit_distance=distance,
+                exact_match=normalized_ground_truth == normalized_prediction,
+            )
+        )
+    return tuple(predictions)
 
 
 def _metric_group(predictions: tuple[OcrPrediction, ...]) -> OcrMetricGroup:
@@ -264,9 +409,13 @@ def evaluate_ocr(config_path: Path) -> OcrEvaluationResult:
     """Chạy recognition-only baseline trên toàn bộ ground-truth test crops."""
     inputs = validate_ocr_evaluation(config_path)
     config = inputs.config
+    root = project_root(config_path)
+    output_dir = resolve_project_path(root, config.project) / config.name
+    output_dir.mkdir(parents=True, exist_ok=True)
+    recognition_inputs = _build_recognition_inputs(inputs, output_dir)
 
     # PaddleOCR imports Transformers, vì vậy PyTorch phải nạp DLL trước Paddle trên Windows.
-    import torch  # noqa: F401
+    # import torch
     from paddleocr import TextRecognition
 
     initialization_started = time.perf_counter()
@@ -280,14 +429,18 @@ def evaluate_ocr(config_path: Path) -> OcrEvaluationResult:
     try:
         inference_started = time.perf_counter()
         raw_results = model.predict(
-            [str(path) for path in inputs.image_paths],
+            [str(recognition_input.path) for recognition_input in recognition_inputs],
             batch_size=config.batch_size,
         )
         inference_seconds = time.perf_counter() - inference_started
     finally:
         model.close()
 
-    predictions = _match_results_to_records(inputs, raw_results)
+    predictions = _match_results_to_recognition_inputs(
+        inputs,
+        recognition_inputs,
+        raw_results,
+    )
     ranked_failures = tuple(
         sorted(
             (prediction for prediction in predictions if not prediction.exact_match),
@@ -301,6 +454,8 @@ def evaluate_ocr(config_path: Path) -> OcrEvaluationResult:
     result = OcrEvaluationResult(
         model_name=config.model_name,
         split="test",
+        geometry=config.geometry,
+        layout=config.layout,
         metrics=_metric_group(predictions),
         metrics_by_geometry=_group_by_geometry(predictions, config.compact_aspect_ratio),
         mean_confidence=fmean(prediction.confidence for prediction in predictions),
@@ -309,9 +464,6 @@ def evaluate_ocr(config_path: Path) -> OcrEvaluationResult:
         failure_examples=ranked_failures,
     )
 
-    root = project_root(config_path)
-    output_dir = resolve_project_path(root, config.project) / config.name
-    output_dir.mkdir(parents=True, exist_ok=True)
     _write_predictions(output_dir / "predictions.jsonl", predictions)
     (output_dir / "metrics.json").write_text(
         json.dumps(result.model_dump(mode="json"), indent=2, sort_keys=True) + "\n",
@@ -341,9 +493,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.check_only:
             inputs = validate_ocr_evaluation(args.config)
             LOGGER.info(
-                "OCR preflight passed images=%d model=%s",
+                "OCR preflight passed images=%d model=%s geometry=%s layout=%s",
                 len(inputs.records),
                 inputs.config.model_name,
+                inputs.config.geometry,
+                inputs.config.layout,
             )
         else:
             result = evaluate_ocr(args.config)

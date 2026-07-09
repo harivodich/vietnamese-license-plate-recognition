@@ -107,20 +107,31 @@ Detailed explanation of the training code, metrics, checkpoints, resume flow, an
 
 ## OCR baseline
 
-Run recognition-only PaddleOCR on the fixed ground-truth test crops:
+The primary OCR path uses a pretrained recognizer first, the same principle as starting detection
+from a pretrained YOLO checkpoint instead of training a detector from scratch. The baseline runs
+recognition only on fixed ground-truth plate crops, so OCR errors are measured independently from
+detection and crop errors.
 
 ```powershell
 python scripts/evaluate_ocr.py --config configs/ocr-baseline.yaml --check-only
 python scripts/evaluate_ocr.py --config configs/ocr-baseline.yaml
+python scripts/evaluate_ocr.py --config configs/ocr-baseline-wide.yaml
+python scripts/evaluate_ocr.py --config configs/ocr-baseline-layout.yaml
 ```
 
-The baseline deliberately excludes the detector so OCR errors can be measured independently.
+`configs/ocr-baseline.yaml` scores the full OCR test split using original crops.
+`configs/ocr-baseline-wide.yaml` scores only one-line wide crops.
+`configs/ocr-baseline-layout.yaml` keeps wide crops unchanged, splits compact crops into ordered
+line crops, then merges line predictions back into full-plate metrics.
+
 Results and error analysis are documented in the
 [OCR baseline report](reports/ocr_baseline/report.md).
 
 ## OCR training
 
-Prepare wide one-line OCR samples, validate the CRNN+CTC experiment, then start training:
+The CRNN+CTC trainer is kept as a controlled scratch baseline and teaching experiment, not as the
+main accuracy route. It is still useful for validating preprocessing, CTC labels, checkpoints,
+resume behavior, and metric code before fine-tuning a stronger pretrained OCR model.
 
 ```powershell
 python scripts/prepare_ocr_training.py --config configs/ocr-crnn.yaml
@@ -136,7 +147,27 @@ If training is interrupted, resume from the latest checkpoint:
 python scripts/train_ocr.py --config configs/ocr-crnn.yaml --resume artifacts/ocr/crnn-ctc-wide-baseline/last.pt
 ```
 
-The trainer selects `best.pt` by validation CER first and uses a conservative cosine learning-rate schedule.
+The trainer selects `best.pt` by validation CER first and uses a conservative cosine learning-rate
+schedule. The next production-oriented OCR step is pretrained OCR fine-tuning with the project
+charset, using the same compact/wide subgroup reporting.
+
+Prepare PaddleOCR fine-tune line data:
+
+```powershell
+python scripts/export_ocr_finetune_data.py --config configs/ocr-finetune-paddleocr.yaml
+python scripts/prepare_paddleocr_finetune.py --config configs/ocr-paddleocr-finetune.yaml
+python scripts/train_paddleocr_finetune.py --config configs/ocr-paddleocr-finetune.yaml
+```
+
+PaddleOCR saves `latest` every epoch and `iter_epoch_5/10/...` according to the configured
+checkpoint interval. Resume interrupted fine-tuning with:
+
+```powershell
+python scripts/train_paddleocr_finetune.py --config configs/ocr-paddleocr-finetune.yaml --resume artifacts/ocr/paddleocr-v5-mobile-finetune/checkpoints/latest
+```
+
+PaddleOCR fine-tuning setup and command shape:
+[OCR fine-tuning guide](docs/ocr-finetuning-guide.md).
 
 Detailed explanation of CRNN, CTC loss, metrics, checkpoints, resume flow, and tunable settings:
 [OCR training guide](docs/ocr-training-guide.md).

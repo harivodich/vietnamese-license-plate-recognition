@@ -2,10 +2,10 @@ model_name: en_PP-OCRv5_mobile_rec
 manifest: data/processed/ocr_manifest.jsonl
 dataset_root: data/raw/kaggle/ocr/v1/lp_ocr_dataset_vi
 project: artifacts/ocr
-name: paddleocr-en-v5-mobile-baseline
+name: paddleocr-en-v5-mobile-wide-baseline
 split: test
 layout: original
-geometry: all
+geometry: wide
 device: cpu
 batch_size: 32
 cpu_threads: 8

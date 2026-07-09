@@ -3,6 +3,7 @@
 import argparse
 import csv
 import logging
+import math
 import random
 import time
 from collections.abc import Sequence
@@ -47,8 +48,17 @@ class OcrBatch:
 
     images: Tensor
     targets: Tensor
+    input_lengths: Tensor
     target_lengths: Tensor
     labels: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class OcrPreprocessedImage:
+    """Preprocessed OCR image plus useful CTC timesteps before right padding."""
+
+    tensor: Tensor
+    input_length: int
 
 
 @dataclass(frozen=True)
@@ -170,14 +180,19 @@ def _augment(image: Image.Image, settings: OcrAugmentationSettings) -> Image.Ima
     return image
 
 
-def preprocess_ocr_image(
+def _feature_timesteps_from_width(width: int) -> int:
+    """Convert resized content width to CRNN timesteps after two floor-pooling stages."""
+    return max(1, width // 4)
+
+
+def _preprocess_ocr_image_with_metadata(
     image_path: Path,
     *,
     image_height: int,
     image_width: int,
     augmentation: OcrAugmentationSettings | None,
-) -> Tensor:
-    """Resize giữ tỉ lệ, pad trắng và chuẩn hóa grayscale về `[-1, 1]`."""
+) -> OcrPreprocessedImage:
+    """Resize/pad an OCR crop and keep the real CTC input length."""
     with Image.open(image_path) as opened:
         image = opened.convert("L")
     if augmentation is not None:
@@ -190,10 +205,29 @@ def preprocess_ocr_image(
     vertical_offset = (image_height - resized_height) // 2
     canvas.paste(resized, (0, vertical_offset))
     array = np.asarray(canvas, dtype=np.float32).copy()
-    return torch.from_numpy(array).unsqueeze(0) / 127.5 - 1.0
+    return OcrPreprocessedImage(
+        tensor=torch.from_numpy(array).unsqueeze(0) / 127.5 - 1.0,
+        input_length=_feature_timesteps_from_width(resized_width),
+    )
 
 
-class OcrLineDataset(Dataset[tuple[Tensor, str]]):
+def preprocess_ocr_image(
+    image_path: Path,
+    *,
+    image_height: int,
+    image_width: int,
+    augmentation: OcrAugmentationSettings | None,
+) -> Tensor:
+    """Resize with aspect ratio, white-pad, and normalize grayscale to `[-1, 1]`."""
+    return _preprocess_ocr_image_with_metadata(
+        image_path,
+        image_height=image_height,
+        image_width=image_width,
+        augmentation=augmentation,
+    ).tensor
+
+
+class OcrLineDataset(Dataset[tuple[Tensor, str, int]]):
     """Lazy image dataset để không giữ hàng nghìn crop trong RAM."""
 
     def __init__(
@@ -214,18 +248,16 @@ class OcrLineDataset(Dataset[tuple[Tensor, str]]):
         """Trả số line samples."""
         return len(self.samples)
 
-    def __getitem__(self, index: int) -> tuple[Tensor, str]:
-        """Đọc và preprocess đúng một sample."""
+    def __getitem__(self, index: int) -> tuple[Tensor, str, int]:
+        """Read and preprocess one OCR sample."""
         sample = self.samples[index]
-        return (
-            preprocess_ocr_image(
-                sample.image_path,
-                image_height=self.image_height,
-                image_width=self.image_width,
-                augmentation=self.augmentation,
-            ),
-            sample.label,
+        image = _preprocess_ocr_image_with_metadata(
+            sample.image_path,
+            image_height=self.image_height,
+            image_width=self.image_width,
+            augmentation=self.augmentation,
         )
+        return image.tensor, sample.label, image.input_length
 
 
 class OcrCollator:
@@ -235,21 +267,25 @@ class OcrCollator:
         """Giữ charset dùng chung cho mọi batch."""
         self.charset = charset
 
-    def __call__(self, items: list[tuple[Tensor, str]]) -> OcrBatch:
-        """Stack ảnh, nối targets và lưu target lengths."""
-        images, labels = zip(*items, strict=True)
+    def __call__(self, items: list[tuple[Tensor, str, int]]) -> OcrBatch:
+        """Stack images, concatenate targets, and keep target/input lengths."""
+        images, labels, input_lengths = zip(*items, strict=True)
         encoded = [self.charset.encode(label) for label in labels]
-        targets = torch.tensor(
-            [index for sequence in encoded for index in sequence],
-            dtype=torch.long,
-        )
         target_lengths = torch.tensor(
             [len(sequence) for sequence in encoded],
+            dtype=torch.long,
+        )
+        input_length_tensor = torch.tensor(input_lengths, dtype=torch.long)
+        if bool((target_lengths > input_length_tensor).any()):
+            raise ValueError("OCR target is longer than useful timesteps after resize")
+        targets = torch.tensor(
+            [index for sequence in encoded for index in sequence],
             dtype=torch.long,
         )
         return OcrBatch(
             images=torch.stack(images),
             targets=targets,
+            input_lengths=input_length_tensor,
             target_lengths=target_lengths,
             labels=tuple(labels),
         )
@@ -267,6 +303,7 @@ def build_crnn(
         dropout=config.model.dropout,
         blank_index=charset.blank_index,
         blank_bias=config.model.blank_bias,
+        input_height=config.model.image_height,
     )
 
 
@@ -320,19 +357,13 @@ def _ctc_loss(
     log_probabilities: Tensor,
     batch: OcrBatch,
 ) -> Tensor:
-    """Tính CTCLoss với cùng input length cho ảnh đã pad về width cố định."""
-    input_lengths = torch.full(
-        (log_probabilities.shape[1],),
-        log_probabilities.shape[0],
-        dtype=torch.long,
-        device=batch.target_lengths.device,
-    )
+    """Compute CTCLoss with real input lengths, excluding right padding."""
     return cast(
         Tensor,
         criterion(
             log_probabilities,
             batch.targets,
-            input_lengths,
+            batch.input_lengths,
             batch.target_lengths,
         ),
     )
@@ -343,6 +374,7 @@ def _move_batch(batch: OcrBatch, device: torch.device) -> OcrBatch:
     return OcrBatch(
         images=batch.images.to(device, non_blocking=True),
         targets=batch.targets.to(device, non_blocking=True),
+        input_lengths=batch.input_lengths,
         target_lengths=batch.target_lengths,
         labels=batch.labels,
     )
@@ -371,10 +403,95 @@ def _train_epoch(
     return float(np.mean(losses))
 
 
-def _decode_batch(log_probabilities: Tensor, charset: OcrCharset) -> tuple[str, ...]:
-    """Greedy decode toàn batch từ `[time, batch, classes]`."""
-    indices = log_probabilities.argmax(dim=2).transpose(0, 1).cpu().tolist()
-    return tuple(charset.decode(sequence) for sequence in indices)
+def _logaddexp(first: float, second: float) -> float:
+    """Stable log(exp(first) + exp(second)) for CTC beam bookkeeping."""
+    if math.isinf(first) and first < 0:
+        return second
+    if math.isinf(second) and second < 0:
+        return first
+    return float(np.logaddexp(first, second))
+
+
+def _decode_ctc_beam(
+    sequence_log_probabilities: Tensor,
+    charset: OcrCharset,
+    *,
+    beam_width: int,
+) -> str:
+    """Prefix beam search for one CTC sequence; fixes greedy extra/repeated chars."""
+    if beam_width <= 1:
+        return charset.decode(sequence_log_probabilities.argmax(dim=1).cpu().tolist())
+    blank = charset.blank_index
+    beams: dict[tuple[int, ...], tuple[float, float]] = {(): (0.0, -math.inf)}
+    for timestep in sequence_log_probabilities.detach().cpu():
+        next_beams: dict[tuple[int, ...], tuple[float, float]] = {}
+        for prefix, (blank_score, nonblank_score) in beams.items():
+            prefix_score = _logaddexp(blank_score, nonblank_score)
+            for class_index, raw_log_probability in enumerate(timestep.tolist()):
+                log_probability = float(raw_log_probability)
+                current_blank, current_nonblank = next_beams.get(prefix, (-math.inf, -math.inf))
+                if class_index == blank:
+                    next_beams[prefix] = (
+                        _logaddexp(current_blank, prefix_score + log_probability),
+                        current_nonblank,
+                    )
+                    continue
+                if prefix and class_index == prefix[-1]:
+                    next_beams[prefix] = (
+                        current_blank,
+                        _logaddexp(current_nonblank, nonblank_score + log_probability),
+                    )
+                    extended = (*prefix, class_index)
+                    extended_blank, extended_nonblank = next_beams.get(
+                        extended,
+                        (-math.inf, -math.inf),
+                    )
+                    next_beams[extended] = (
+                        extended_blank,
+                        _logaddexp(extended_nonblank, blank_score + log_probability),
+                    )
+                    continue
+                extended = (*prefix, class_index)
+                extended_blank, extended_nonblank = next_beams.get(
+                    extended,
+                    (-math.inf, -math.inf),
+                )
+                next_beams[extended] = (
+                    extended_blank,
+                    _logaddexp(extended_nonblank, prefix_score + log_probability),
+                )
+        beams = dict(
+            sorted(
+                next_beams.items(),
+                key=lambda item: _logaddexp(item[1][0], item[1][1]),
+                reverse=True,
+            )[:beam_width]
+        )
+    best_prefix = max(beams, key=lambda prefix: _logaddexp(beams[prefix][0], beams[prefix][1]))
+    return "".join(charset.characters[index - 1] for index in best_prefix)
+
+
+def _decode_batch(
+    log_probabilities: Tensor,
+    charset: OcrCharset,
+    *,
+    input_lengths: Tensor | None = None,
+    beam_width: int = 1,
+) -> tuple[str, ...]:
+    """Decode a batch and ignore padded timesteps beyond each real OCR crop."""
+    batch_first = log_probabilities.transpose(0, 1)
+    if input_lengths is None:
+        lengths = [log_probabilities.shape[0]] * batch_first.shape[0]
+    else:
+        lengths = [int(length) for length in input_lengths.cpu().tolist()]
+    predictions: list[str] = []
+    for sequence, length in zip(batch_first, lengths, strict=True):
+        useful_sequence = sequence[:length]
+        if beam_width <= 1:
+            predictions.append(charset.decode(useful_sequence.argmax(dim=1).cpu().tolist()))
+        else:
+            predictions.append(_decode_ctc_beam(useful_sequence, charset, beam_width=beam_width))
+    return tuple(predictions)
 
 
 def _prediction_examples(
@@ -383,6 +500,7 @@ def _prediction_examples(
     charset: OcrCharset,
     *,
     device: torch.device,
+    beam_width: int,
     limit: int = 5,
 ) -> tuple[tuple[str, str], ...]:
     """Lấy vài dự đoán cố định để phát hiện CTC collapse ngay trong log train."""
@@ -390,7 +508,9 @@ def _prediction_examples(
     raw_batch = next(iter(loader))
     batch = _move_batch(raw_batch, device)
     with torch.no_grad():
-        predictions = _decode_batch(model(batch.images), charset)
+        predictions = _decode_batch(
+            model(batch.images), charset, input_lengths=batch.input_lengths, beam_width=beam_width
+        )
     return tuple(zip(batch.labels[:limit], predictions[:limit], strict=True))
 
 
@@ -406,6 +526,7 @@ def _validate_epoch(
     charset: OcrCharset,
     *,
     device: torch.device,
+    beam_width: int,
 ) -> OcrEpochMetrics:
     """Đo loss, exact match và micro CER không cập nhật model."""
     model.eval()
@@ -419,7 +540,9 @@ def _validate_epoch(
             batch = _move_batch(raw_batch, device)
             log_probabilities = model(batch.images)
             losses.append(float(_ctc_loss(criterion, log_probabilities, batch).cpu()))
-            predictions = _decode_batch(log_probabilities, charset)
+            predictions = _decode_batch(
+                log_probabilities, charset, input_lengths=batch.input_lengths, beam_width=beam_width
+            )
             for prediction, label in zip(predictions, batch.labels, strict=True):
                 exact_matches += prediction == label
                 edit_distance += levenshtein_distance(label, prediction)
@@ -658,6 +781,7 @@ def train_ocr(
             criterion,
             inputs.charset,
             device=device,
+            beam_width=config.train.decoder_beam_width,
         )
         epoch_seconds = time.perf_counter() - started
         learning_rate = optimizer.param_groups[0]["lr"]
@@ -675,8 +799,11 @@ def train_ocr(
             cer=validation.cer,
             loss=validation.loss,
         )
+        meaningful_improvement = (
+            candidate_score.cer < best_score.cer - config.train.early_stop_min_delta
+        )
         improved = _is_better_ocr_checkpoint(candidate_score, best_score)
-        stale_epochs = 0 if improved else stale_epochs + 1
+        stale_epochs = 0 if meaningful_improvement else stale_epochs + 1
         if improved:
             best_score = candidate_score
             _save_checkpoint(
@@ -729,6 +856,7 @@ def train_ocr(
                 validation_loader,
                 inputs.charset,
                 device=device,
+                beam_width=config.train.decoder_beam_width,
             )
             LOGGER.info("OCR prediction samples: %s", _format_prediction_examples(examples))
         if (
@@ -766,13 +894,16 @@ def tiny_overfit_ocr(
     batch = collator(
         [
             (
-                preprocess_ocr_image(
-                    sample.image_path,
-                    image_height=config.model.image_height,
-                    image_width=config.model.image_width,
-                    augmentation=None,
-                ),
+                (
+                    image := _preprocess_ocr_image_with_metadata(
+                        sample.image_path,
+                        image_height=config.model.image_height,
+                        image_width=config.model.image_width,
+                        augmentation=None,
+                    )
+                ).tensor,
                 sample.label,
+                image.input_length,
             )
             for sample in samples
         ]
@@ -790,7 +921,12 @@ def tiny_overfit_ocr(
         if step == 1 or step % 100 == 0 or step == steps:
             model.eval()
             with torch.no_grad():
-                predictions = _decode_batch(model(batch.images), inputs.charset)
+                predictions = _decode_batch(
+                    model(batch.images),
+                    inputs.charset,
+                    input_lengths=batch.input_lengths,
+                    beam_width=config.train.decoder_beam_width,
+                )
             exact = sum(
                 prediction == label
                 for prediction, label in zip(predictions, batch.labels, strict=True)
@@ -805,7 +941,12 @@ def tiny_overfit_ocr(
             )
     model.eval()
     with torch.no_grad():
-        final_predictions = _decode_batch(model(batch.images), inputs.charset)
+        final_predictions = _decode_batch(
+            model(batch.images),
+            inputs.charset,
+            input_lengths=batch.input_lengths,
+            beam_width=config.train.decoder_beam_width,
+        )
     exact = sum(
         prediction == label
         for prediction, label in zip(final_predictions, batch.labels, strict=True)

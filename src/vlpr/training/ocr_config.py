@@ -1,7 +1,6 @@
 """Schema cấu hình dùng chung cho chuẩn bị dữ liệu và train CRNN+CTC."""
 
 from pathlib import Path
-from typing import Literal
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -33,7 +32,7 @@ class OcrCrnnModelSettings(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    image_height: Literal[32]
+    image_height: int = Field(ge=32)
     image_width: int = Field(gt=0)
     hidden_size: int = Field(gt=0)
     lstm_layers: int = Field(gt=0)
@@ -67,6 +66,8 @@ class OcrOptimizationSettings(BaseModel):
     learning_rate: float = Field(gt=0.0)
     weight_decay: float = Field(ge=0.0)
     gradient_clip_norm: float = Field(gt=0.0)
+    decoder_beam_width: int = Field(gt=0)
+    early_stop_min_delta: float = Field(ge=0.0)
     patience: int = Field(ge=0)
     save_period: int = Field(gt=0)
 

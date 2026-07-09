@@ -6,12 +6,12 @@ import logging
 from collections.abc import Sequence
 from pathlib import Path
 
-import numpy as np
 from PIL import Image
 
 from vlpr.config import project_root, resolve_project_path
 from vlpr.data.manifest_io import read_manifest
 from vlpr.data.manifest_schema import OcrManifestRecord
+from vlpr.data.ocr_layout import split_compact_crop
 from vlpr.evaluation.ocr import normalize_plate_text
 from vlpr.training.ocr_config import (
     OcrTrainingDataSettings,
@@ -20,48 +20,6 @@ from vlpr.training.ocr_config import (
 from vlpr.utils.logging import configure_logging
 
 LOGGER = logging.getLogger(__name__)
-
-
-def find_compact_row_split(
-    image: Image.Image,
-    *,
-    search_start: float,
-    search_end: float,
-) -> int:
-    """Tìm hàng có biến thiên ngang thấp nhất trong vùng giữa hai text lines."""
-    gray = np.asarray(image.convert("L"), dtype=np.float32)
-    height = gray.shape[0]
-    if height < 4:
-        raise ValueError(f"compact crop quá thấp để tách dòng: {height}")
-    first = max(1, round(height * search_start))
-    last = min(height - 1, round(height * search_end))
-    if first >= last:
-        raise ValueError(f"vùng tìm split rỗng với height={height}")
-
-    row_variation = gray.std(axis=1)
-    kernel_size = min(5, max(1, last - first))
-    kernel = np.ones(kernel_size, dtype=np.float32) / kernel_size
-    smoothed = np.convolve(row_variation, kernel, mode="same")
-    return int(first + np.argmin(smoothed[first:last]))
-
-
-def split_compact_crop(
-    image: Image.Image,
-    *,
-    search_start: float,
-    search_end: float,
-) -> tuple[Image.Image, Image.Image]:
-    """Tách top/bottom theo khe giữa dòng và từ chối crop con rỗng."""
-    split_row = find_compact_row_split(
-        image,
-        search_start=search_start,
-        search_end=search_end,
-    )
-    top = image.crop((0, 0, image.width, split_row))
-    bottom = image.crop((0, split_row, image.width, image.height))
-    if top.height == 0 or bottom.height == 0:
-        raise ValueError("row split tạo crop rỗng")
-    return top, bottom
 
 
 def _ocr_records(path: Path) -> tuple[OcrManifestRecord, ...]:
