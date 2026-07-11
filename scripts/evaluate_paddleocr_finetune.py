@@ -7,6 +7,7 @@ import sys
 import time
 from pathlib import Path
 from statistics import fmean
+from typing import Any
 
 import cv2
 
@@ -28,11 +29,30 @@ LOGGER = logging.getLogger(__name__)
 class DummyArgs:
     """Args mô phỏng cho tools.infer.predict_rec.TextRecognizer"""
 
-    def __getattr__(self, item):
+    def __getattr__(self, item: str) -> bool:
+        """Run the getattr step for this workflow."""
         return False
 
 
+def _resolve_model_dir(root: Path, model_dir: str | None) -> Path:
+    """Run the resolve model dir step for this workflow."""
+    if not model_dir:
+        raise ValueError("fine-tuned OCR eval config must define model_dir")
+    resolved = resolve_project_path(root, Path(model_dir))
+    required_files = ("inference.pdiparams", "inference.yml")
+    missing = [name for name in required_files if not (resolved / name).is_file()]
+    has_model_graph = any(
+        (resolved / candidate).is_file() for candidate in ("inference.json", "inference.pdmodel")
+    )
+    if not has_model_graph:
+        missing.append("inference.json|inference.pdmodel")
+    if missing:
+        raise FileNotFoundError(f"missing PaddleOCR inference files in {resolved}: {missing}")
+    return resolved
+
+
 def evaluate_finetune_ocr(config_path: Path) -> OcrEvaluationResult:
+    """Run the evaluate finetune ocr step for this workflow."""
     inputs = validate_ocr_evaluation(config_path)
     config = inputs.config
     root = project_root(config_path)
@@ -47,8 +67,8 @@ def evaluate_finetune_ocr(config_path: Path) -> OcrEvaluationResult:
 
     from tools.infer.predict_rec import TextRecognizer
 
-    args = DummyArgs()
-    args.rec_model_dir = str(resolve_project_path(root, config.model_dir))
+    args: Any = DummyArgs()
+    args.rec_model_dir = str(_resolve_model_dir(root, config.model_dir))
     args.rec_image_shape = "3,48,320"
     args.rec_batch_num = config.batch_size
     args.rec_algorithm = "SVTR_LCNet"
@@ -85,7 +105,7 @@ def evaluate_finetune_ocr(config_path: Path) -> OcrEvaluationResult:
 
     # Chuyển đổi kết quả về dạng tương đương raw_results
     raw_results = []
-    for path, res in zip(path_list, rec_res, strict=False):
+    for path, res in zip(path_list, rec_res, strict=True):
         text, score = res[0], res[1]
         raw_results.append({"input_path": path, "rec_text": text, "rec_score": score})
 
@@ -129,6 +149,7 @@ def evaluate_finetune_ocr(config_path: Path) -> OcrEvaluationResult:
 
 
 def _build_parser() -> argparse.ArgumentParser:
+    """Run the build parser step for this workflow."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--config",
@@ -139,6 +160,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run the main step for this workflow."""
     configure_logging()
     args = _build_parser().parse_args(argv)
     try:

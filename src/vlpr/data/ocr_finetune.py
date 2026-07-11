@@ -35,6 +35,8 @@ class OcrFinetuneDataConfig(BaseModel):
     split_search_start: float = Field(gt=0.0, lt=1.0)
     split_search_end: float = Field(gt=0.0, lt=1.0)
     extra_characters: str = ""
+    min_train_crop_area: int = Field(default=0, ge=0)
+    min_validation_crop_area: int = Field(default=0, ge=0)
 
 
 class OcrFinetuneConfig(BaseModel):
@@ -94,6 +96,29 @@ def _split_name(record: OcrManifestRecord, suffix: str) -> str:
     return f"{record.sha256}_{suffix}.png"
 
 
+def _minimum_area_for_split(
+    split: Literal["train", "validation", "test"],
+    settings: OcrFinetuneDataConfig,
+) -> int:
+    """Return the configured crop-quality threshold for train/validation only."""
+    if split == "train":
+        return settings.min_train_crop_area
+    if split == "validation":
+        return settings.min_validation_crop_area
+    return 0
+
+
+def _should_skip_for_quality(
+    record: OcrManifestRecord,
+    settings: OcrFinetuneDataConfig,
+) -> bool:
+    """Skip tiny train/validation crops without changing the frozen test split."""
+    if record.split not in {"train", "validation", "test"}:
+        return False
+    min_area = _minimum_area_for_split(record.split, settings)
+    return min_area > 0 and record.width * record.height < min_area
+
+
 def _export_record(
     record: OcrManifestRecord,
     *,
@@ -103,6 +128,8 @@ def _export_record(
 ) -> tuple[_LineSample, ...]:
     """Export one manifest record as one wide line or two compact line samples."""
     if record.split not in {"train", "validation", "test"}:
+        return ()
+    if _should_skip_for_quality(record, settings):
         return ()
 
     split = record.split
@@ -155,7 +182,10 @@ def export_ocr_finetune_data(config_path: Path) -> dict[str, object]:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     samples_by_split: dict[str, list[_LineSample]] = defaultdict(list)
+    skipped_by_split: dict[str, int] = defaultdict(int)
     for record in _ocr_records(manifest):
+        if _should_skip_for_quality(record, config.data):
+            skipped_by_split[record.split] += 1
         for sample in _export_record(
             record,
             dataset_root=dataset_root,
@@ -191,6 +221,10 @@ def export_ocr_finetune_data(config_path: Path) -> dict[str, object]:
     summary: dict[str, object] = {
         "characters": len(characters),
         "compact_aspect_ratio": config.data.compact_aspect_ratio,
+        "min_train_crop_area": config.data.min_train_crop_area,
+        "min_validation_crop_area": config.data.min_validation_crop_area,
+        "skipped_train_records": skipped_by_split["train"],
+        "skipped_validation_records": skipped_by_split["validation"],
         "test_samples": len(samples_by_split["test"]),
         "train_samples": len(samples_by_split["train"]),
         "validation_samples": len(samples_by_split["validation"]),
@@ -224,3 +258,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
     LOGGER.info("OCR fine-tune data exported: %s", summary)
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

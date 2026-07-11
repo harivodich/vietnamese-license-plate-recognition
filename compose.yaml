@@ -1,0 +1,9 @@
+services:
+  vlpr:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./artifacts:/app/artifacts:ro
+      - ./data/processed:/app/data/processed:ro
+    restart: unless-stopped

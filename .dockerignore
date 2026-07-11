@@ -1,0 +1,27 @@
+.git/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+__pycache__/
+artifacts/
+data/
+external/
+runs/
+wandb/
+*.pt
+*.pdparams
+*.pdopt
+*.pdmodel
+*.pdiparams
+*.pdiparams.info
+colab_training_pack/
+*** Add File: E:\PRJ\vietnamese-license-plate-recognition\docker-compose.yml
+services:
+  vlpr:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./artifacts:/app/artifacts:ro
+      - ./data/processed:/app/data/processed:ro
+    restart: unless-stopped

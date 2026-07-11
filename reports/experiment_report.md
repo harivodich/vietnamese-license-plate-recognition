@@ -57,15 +57,15 @@ Threshold tuning for deployment must use validation data.
 ### Recall by plate size
 
 Size groups use the same COCO-inspired thresholds as the dataset audit after letterboxing to
-`640 × 640`:
+`640 Ã— 640`:
 
 | Size | Instances | Matched | Recall |
 | --- | ---: | ---: | ---: |
-| Small, area below `32²` | 81 | 76 | 0.9383 |
-| Medium, area from `32²` to below `96²` | 601 | 601 | 1.0000 |
-| Large, area at least `96²` | 367 | 367 | 1.0000 |
+| Small, area below `32Â²` | 81 | 76 | 0.9383 |
+| Medium, area from `32Â²` to below `96Â²` | 601 | 601 | 1.0000 |
+| Large, area at least `96Â²` | 367 | 367 | 1.0000 |
 
-All five false negatives occur in one `600 × 400` image containing seven very small plates. Two
+All five false negatives occur in one `600 Ã— 400` image containing seven very small plates. Two
 plates are matched at confidence `0.25`; additional low-confidence candidates appear below the fixed threshold.
 The main measured weakness is therefore dense scenes with very small plates. Medium and large
 plates have no false negatives at this operating point.
@@ -187,28 +187,166 @@ the fixed held-out line-level test split using PaddleOCR's official recognition 
 | Normalized edit distance | 0.8997 |
 | GPU evaluation throughput | 167.65 FPS |
 
-### Full-plate Evaluation
+### Full-plate evaluation
 
-The fine-tuned recognizer was exported and integrated into the project evaluation path, measuring full-plate exact match, CER, and geometric subgroup metrics under the exact same strict protocol as the pretrained OCR baseline.
+The fine-tuned recognizer was exported and integrated into the project evaluation path. The table
+separates two effects: layout handling improves the pretrained model, and fine-tuning improves the
+same split-compact protocol further.
 
-| Metric | Pretrained Baseline | Fine-tuned Model | Improvement |
+| Metric | Pretrained original | Pretrained split-compact | Fine-tuned split-compact |
 | --- | ---: | ---: | ---: |
-| Full-plate exact match | 19.44% | 70.42% | **+ 50.98%** |
-| Character error rate (CER) | 59.38% | 9.25% | **- 50.13%** |
-| Character accuracy | 40.62% | 90.75% | **+ 50.13%** |
+| Full-plate exact match | 17.85% | 36.55% | 81.05% |
+| Character error rate (CER) | 60.45% | 33.86% | 5.37% |
+| Character accuracy | 39.55% | 66.14% | 94.63% |
 
-**Metrics by Geometry:**
-- **Compact plates (2 lines):** Exact match 66.89%, CER 10.49%
-- **Wide plates (1 line):** Exact match 74.60%, CER 7.69%
+Fine-tuning improves exact match by `+44.50` percentage points over the layout-aware pretrained
+baseline, and by `+63.20` percentage points over the direct pretrained baseline on the cleaned
+manifest.
 
-The fine-tuning process was a massive success, boosting the strict full-plate exact match rate from an unusable 19% to over 70%, and pushing character accuracy past 90%.
+Fine-tuned subgroup metrics:
 
-### Error Analysis and Next Steps
+| Geometry | Samples | Exact match | CER | Character accuracy |
+| --- | ---: | ---: | ---: | ---: |
+| Compact plates | 436 | 80.50% | 5.43% | 94.57% |
+| Wide plates | 382 | 81.68% | 5.30% | 94.70% |
 
-Despite the massive improvement, the 70.4% exact match indicates room for optimization. The top 25 failure cases were extracted for manual visual review using the `scripts/analyze_ocr_errors.py` script.
+### Error analysis and next steps
 
-Initial findings from the worst failure cases (e.g. `Ground truth: 68HC 00047` vs `Prediction: 29A 1923`) strongly indicate the presence of **Noisy Labels / Annotation Errors** in the ground-truth test set. When the model outputs a completely different but valid license plate format with a high edit distance, it is usually because the dataset annotation is mismatched with the image crop.
+The model is now clearly learning the task, but `81.05%` exact match still leaves enough failures to
+inspect before further training. The top failure examples are saved in
+`artifacts/ocr/paddleocr-v5-mobile-finetune/eval/metrics.json` and the full prediction table is saved
+as `artifacts/ocr/paddleocr-v5-mobile-finetune/eval/predictions.jsonl`.
 
-**Recommended Next Steps before further training:**
-1. **Clean the Test Set:** Visually review the images in `artifacts/ocr/paddleocr-v5-mobile-finetune/eval/failures` and correct the ground-truth labels. Evaluating on noisy labels artificially caps the maximum possible exact match score.
-2. **Address Compact Plates:** Wide plates perform significantly better than compact plates (74.6% vs 66.9% exact match). Data augmentation targeting compact plates (blur, perspective transform) or reviewing the crop splitting logic should be considered.
+The largest errors are concentrated in very small or hard crops, especially compact plates. Some
+examples may also be annotation issues, but that should be verified visually before changing labels.
+The next step is failure review by geometry, crop size, and common character confusions before any
+new fine-tuning run.
+
+Failure analysis artifacts:
+
+| Evidence | Value |
+| --- | ---: |
+| Failed full-plate samples | 155 |
+| Likely label issues | 3 |
+| Likely quality issues | 93 |
+| Uncertain failures | 59 |
+| Compact failures | 85 |
+| Wide failures | 70 |
+| Tiny crop failures, area `<500 px` | 55 |
+| Severe failures, edit distance `>=7` | 8 |
+| Mean edit distance among failures | 2.30 |
+| Mean confidence among failures | 0.836 |
+
+The new bucketed review makes the next action clear: inspect `label_review/` first, then
+`quality_review/`. The most common edit operations are deletions of digits (`0`, `1`, `3`, `5`,
+`7`) and digit confusions such as `7->2`, `2->0`, `6->0`, `6->5`, and `9->0`. That points to a mix
+of tiny/blurred crops and a small number of possible label issues, not a need for blind retraining.
+
+Review files:
+
+- `artifacts/ocr/paddleocr-v5-mobile-finetune/eval/error_report.md`;
+- `artifacts/ocr/paddleocr-v5-mobile-finetune/eval/error_summary.json`;
+- `artifacts/ocr/paddleocr-v5-mobile-finetune/eval/failure_contact_sheet_label.jpg`;
+- `artifacts/ocr/paddleocr-v5-mobile-finetune/eval/failure_contact_sheet_quality.jpg`;
+- `artifacts/ocr/paddleocr-v5-mobile-finetune/eval/label_review/`;
+- `artifacts/ocr/paddleocr-v5-mobile-finetune/eval/quality_review/`;
+- `artifacts/ocr/paddleocr-v5-mobile-finetune/eval/failures/`.
+
+Manual review decisions applied before the cleaned evaluation:
+
+- `imgs/train/type3_277.jpg` corrected from `29KT 00576` to `2 003`;
+- `imgs/train/type1_683.jpg`, `imgs/train/type2_261.jpg`, and `imgs/val/type2_912.jpg` excluded because the crop is too blurred, truncated, or label evidence is unsafe.
+
+### OCR latency benchmark
+
+A small CPU benchmark was run on the same 100 test plate records with split-compact layout and three
+repeats. Timing excludes model initialization but includes image loading and OCR inference.
+
+| Model | Plates | Recognizer inputs | ms/plate | ms/recognizer input |
+| --- | ---: | ---: | ---: | ---: |
+| Pretrained split-compact | 100 | 149 | 93.11 | 62.49 |
+| Fine-tuned split-compact | 100 | 149 | 362.56 | 243.33 |
+
+The fine-tuned model is much more accurate but currently slower on CPU. This should be revisited
+before API optimization, especially with ONNX export or GPU inference.
+
+### Continuation experiments
+
+Additional PaddleOCR continuation attempts were run from the current `best_accuracy` model to check
+whether more training alone improves the recognizer. They did not beat the frozen fine-tuned model.
+
+| Attempt | Setup | Best PaddleOCR validation acc | Decision |
+| --- | --- | ---: | --- |
+| Resume optimizer | Continue from `best_accuracy` with optimizer/scheduler state | 0.7549 | Not useful; learning rate had decayed near zero. |
+| Reset optimizer, `5e-5` LR | Load `best_accuracy.pdparams`, reset optimizer | 0.7407 | Rejected; validation accuracy dropped. |
+| Reset optimizer, `1e-5` LR, no `RecConAug` | Load `best_accuracy.pdparams`, train gently, save to a separate v3 Drive folder | 0.7359 | Rejected; validation accuracy still dropped. |
+
+The selected OCR model remains the original PaddleOCR fine-tuned `best_accuracy` checkpoint with
+full-plate evaluation `81.05%` exact match, CER `5.37%`, and character accuracy `94.63%`.
+
+The next OCR work should not be blind retraining. It should focus on reviewing the remaining OCR
+failure set, removing unsafe labels or unusable crops, improving compact crop splitting where
+needed, and only then launching another controlled fine-tune.
+
+### Quality-filtered training export
+
+A new OCR fine-tune data export now applies an objective crop-area filter to train and validation
+records only. Crops with area below `500 px` are excluded from training/validation because the error
+analysis shows tiny crops are a dominant failure group. The fixed test split is not filtered by this
+rule, so evaluation remains comparable and is not made easier by removing hard test examples.
+
+| Split | Line samples after filter | Skipped records |
+| --- | ---: | ---: |
+| Train | 6,718 | 658 |
+| Validation | 1,104 | 116 |
+| Test | 1,254 | 0 |
+
+The refreshed Colab pack uses this filtered training export, starts from the selected
+`best_accuracy.pdparams` weights, resets optimizer state, trains for `20` epochs at learning rate
+`1e-5`, disables `RecConAug`, and writes checkpoints to
+`/content/drive/MyDrive/paddleocr_checkpoints_v3`. This is a controlled data-quality experiment; it
+must beat the frozen OCR checkpoint before replacing the selected model.
+
+The filtered run reached PaddleOCR validation accuracy `0.7899` at epoch 8, compared with `0.7549`
+for the previous continuation baseline. Because the validation set was changed by the quality
+filter, this is only a candidate improvement. The v3 checkpoint must still be exported and evaluated
+on the fixed project test split with `configs/ocr-finetune-eval-v3.yaml` before it can replace the
+selected OCR model.
+
+The fixed-test evaluation of v3 is now complete. It used the same 818-record test split as the
+selected model, so the comparison is valid:
+
+| Model | Exact match | CER | Character accuracy | Decision |
+| --- | ---: | ---: | ---: | --- |
+| Selected fine-tuned checkpoint | 81.05% | 5.37% | 94.63% | Keep |
+| v3 quality-filtered continuation | 77.75% | 6.32% | 93.68% | Reject |
+
+The v3 run improved its filtered validation score, but became worse on the fixed test set. This is
+evidence that the validation change made the experiment look better without improving generalization.
+The v3 checkpoint is therefore retained as an experiment artifact only; it must not replace the
+selected checkpoint. Further progress should come from correcting confirmed labels, handling
+unusable crops, and applying plate-format post-processing, followed by evaluation on the unchanged
+test split.
+### ONNX detection benchmark
+
+The selected YOLO detector was exported from `best.pt` to `best.onnx` at input size 640 and
+benchmarked on 20 fixed detection test images on CPU, with three warm-up images per runtime.
+
+| Runtime | Mean latency | p50 | p95 | Throughput |
+| --- | ---: | ---: | ---: | ---: |
+| PyTorch | 95.09 ms/image | 91.53 ms | 128.35 ms | 10.52 images/s |
+| ONNX Runtime | 87.56 ms/image | 80.98 ms | 163.56 ms | 11.42 images/s |
+
+ONNX Runtime improved mean latency by about 8% and throughput by about 9%, but had a worse p95 on
+this small CPU sample. It is therefore a deployment candidate, not an automatic replacement. A
+larger benchmark and output-equivalence check are required before selecting it for production.
+A larger 100-image CPU benchmark confirmed the ONNX advantage:
+
+| Runtime | Mean latency | p50 | p95 | Throughput |
+| --- | ---: | ---: | ---: | ---: |
+| PyTorch | 103.30 ms/image | 96.66 ms | 168.03 ms | 9.68 images/s |
+| ONNX Runtime | 79.42 ms/image | 78.40 ms | 86.53 ms | 12.59 images/s |
+
+On this larger run, ONNX Runtime is 23% faster on mean latency, 19% faster at p50, and 49% faster
+at p95. ONNX is therefore the preferred candidate for CPU detection deployment, pending an
+output-equivalence check against the PyTorch checkpoint.

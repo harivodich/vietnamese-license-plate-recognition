@@ -4,6 +4,15 @@ import numpy as np
 from PIL import Image
 
 
+def enlarge_small_crop(image: Image.Image, *, minimum_side: int = 48) -> Image.Image:
+    """Upscale tiny crops before OCR so interpolation happens once, before line splitting."""
+    if min(image.width, image.height) >= minimum_side:
+        return image
+    scale = minimum_side / min(image.width, image.height)
+    size = (round(image.width * scale), round(image.height * scale))
+    return image.resize(size, Image.Resampling.LANCZOS)
+
+
 def find_compact_row_split(
     image: Image.Image,
     *,

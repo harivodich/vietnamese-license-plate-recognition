@@ -183,3 +183,62 @@ pytest
 
 Training, evaluation, API, Docker, measured results, and limitations will be documented as their
 gates are completed.
+
+## End-to-end inference
+
+Run detection, OCR, normalization, and status classification on one vehicle image:
+
+```bash
+python scripts/predict_end_to_end.py path/to/vehicle.jpg
+```
+
+Create an annotated review image and a separate JSON result:
+
+```bash
+python scripts/predict_visualized.py path/to/vehicle.jpg \
+  --output artifacts/prediction_review.jpg \
+  --json-output artifacts/prediction.json
+```
+
+Run the API locally:
+
+```bash
+uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+Open `http://127.0.0.1:8000/docs` and use `POST /predict`.
+
+## Video tracking
+
+Run plate detection, ByteTrack IDs, and best-frame OCR updates:
+
+```bash
+python scripts/track_video.py path/to/video.mp4
+```
+
+The command writes `artifacts/tracked_plates.mp4` and a frame-level JSONL audit file.
+
+## Docker
+
+The image keeps model and dataset files outside Git. Checkpoints and processed OCR assets are mounted
+read-only through Compose:
+
+```bash
+docker compose build
+docker compose up
+```
+
+## Deployment benchmark
+
+The selected detector was exported to ONNX and compared with PyTorch on 100 fixed test images. ONNX
+Runtime achieved 79.42 ms mean latency, 78.40 ms p50, 86.53 ms p95, and 12.59 images/s on CPU. All
+100 ONNX detections matched PyTorch at IoU >= 0.9, with mean IoU 0.977 and maximum confidence delta
+0.0116. ONNX is therefore the selected CPU detection runtime.
+
+## Limitations
+
+Detection and OCR were trained and evaluated on separate datasets. A numeric end-to-end exact-match
+metric is not reported because the project does not yet have an external set containing vehicle
+images and verified plate text for the same records. Very small or blurred plate crops can remain
+unreadable; preprocessing and super-resolution must not be treated as evidence when source pixels
+are missing. Video OCR improves opportunities by revisiting sharper frames under the same track ID.

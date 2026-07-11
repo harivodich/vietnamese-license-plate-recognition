@@ -30,3 +30,16 @@ matching completion receipt makes repeated commands idempotent.
 
 Public Kaggle downloads normally work without credentials. If Kaggle requests authentication,
 set `KAGGLE_API_TOKEN` or configure the credentials supported by `kagglehub`. Never commit tokens.
+
+## External end-to-end test set
+
+Place images outside the two training datasets under `external/images/` and create
+`external/manifest.jsonl`. Each line contains one image with one target plate:
+
+```json
+{"image_path":"images/0001.jpg","plate_text":"51G 51008"}
+```
+
+The evaluator normalizes `plate_text`, runs detection and OCR, and writes predictions and metrics
+under `artifacts/`. External images remain ignored by Git so the repository contains code and
+reproducible metadata only, not unlicensed image data.

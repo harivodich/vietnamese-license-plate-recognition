@@ -1,0 +1,29 @@
+paddleocr:
+  repo_dir: external/PaddleOCR
+  base_config: configs/rec/PP-OCRv5/multi_language/en_PP-OCRv5_mobile_rec.yaml
+  train_script: tools/train.py
+
+data:
+  export_dir: data/processed/ocr_finetune_paddleocr
+  train_list: train_list.txt
+  validation_list: val_list.txt
+  test_list: test_list.txt
+  character_dict: dict.txt
+
+output:
+  project: artifacts/ocr
+  name: paddleocr-v5-mobile-finetune-v2
+  train_config: train_config.yml
+
+train:
+  use_gpu: true
+  epochs: 120
+  learning_rate: 0.00005
+  warmup_epoch: 0
+  batch_size_per_card: 32
+  eval_batch_step: [0, 250]
+  save_epoch_step: 5
+  num_workers: 0
+  pretrained_model: ""
+  resume_from: artifacts/ocr/paddleocr-v5-mobile-finetune/checkpoints/best_accuracy
+  use_space_char: false

@@ -15,9 +15,11 @@ data/processed/*
 !data/raw/.gitkeep
 !data/interim/.gitkeep
 !data/processed/.gitkeep
+data//external/*
+!data//external/.gitkeep
 mlruns/
 wandb/
-external/
+/external/
 output/
 *.pdparams
 *.pdopt
